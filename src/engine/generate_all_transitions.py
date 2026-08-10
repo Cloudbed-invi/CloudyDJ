@@ -366,7 +366,13 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
         vocal_end_in_pre = min(a_vocal_cut, a_swap)
         if vocal_end_in_pre > a_pre_start:
             wl = _write_len(out, out_pre_off, a["vocals"], a_pre_start, vocal_end_in_pre)
-            out[out_pre_off:out_pre_off + wl] += a["vocals"][a_pre_start:a_pre_start + wl]
+            vocal_chunk = a["vocals"][a_pre_start:a_pre_start + wl].copy()
+            # 100ms fade out to avoid a hard snap/pop at the cut point
+            fade_samples = min(int(0.1 * sr), len(vocal_chunk))
+            if fade_samples > 0:
+                fade = np.linspace(1.0, 0.0, fade_samples, dtype=np.float32)[:, None]
+                vocal_chunk[-fade_samples:] *= fade
+            out[out_pre_off:out_pre_off + wl] += vocal_chunk
 
     # Add echo tail to A's cut vocal
     if a_vocal_cut > spb:
@@ -546,10 +552,9 @@ def generate_treble_swap_transition(track_a_str, track_b_str, out_name):
     ep_in    = np.sin(t)[:, None]   # B fades in
 
     if n > 0:
-        # A drums, other, vocals fade out. A BASS stays FULL.
-        for stem in ["drums", "other", "vocals"]:
+        # A: all stems fade out with equal-power curve
+        for stem in ["drums", "bass", "other", "vocals"]:
             out[pre_len:pre_len + n] += a[stem][a_blend_start:a_blend_start + n] * ep_out
-        out[pre_len:pre_len + n] += a["bass"][a_blend_start:a_blend_start + n]
 
         # B drums: HPF'd at 250 Hz to strip kick sub, fade in
         b_drums_section = b["drums"][b_blend_start:b_blend_start + n]
@@ -656,10 +661,13 @@ def generate_drop_swap(track_a_str, track_b_str, out_name):
         
     out[pre_len:pre_len + gap_len] += riser_stereo * 0.7
 
-    # LUFS match
-    a_m = a["bass"][max(0, a_drop - 4 * spb):a_drop]
-    b_m = b["bass"][b_drop:min(b_drop + 4 * spb, len(b["bass"]))]
+    # LUFS match: Measure A's Drop vs B's Drop
+    a_m = a["bass"][a_drop:min(a_drop + 4 * spb, len(a["bass"]))] + \
+          a["drums"][a_drop:min(a_drop + 4 * spb, len(a["drums"]))]
+    b_m = b["bass"][b_drop:min(b_drop + 4 * spb, len(b["bass"]))] + \
+          b["drums"][b_drop:min(b_drop + 4 * spb, len(b["drums"]))]
     gain = _lufs_gain(a_m, b_m, sr)
+    print(f"  LUFS gain applied to B: {gain:.3f}×")
 
     # Post: B from its drop (after the gap)
     b_start_out = pre_len + gap_len
@@ -768,10 +776,13 @@ def generate_loop_roll_tension(track_a_str, track_b_str, out_name):
     if roll_wl > 0:
         out[roll_start:roll_start + roll_wl] += roll_stereo[:roll_wl]
 
-    # LUFS match
-    a_m = a["bass"][max(0, a_drop - 4 * spb):a_drop]
-    b_m = b["bass"][b_drop:min(b_drop + 4 * spb, len(b["bass"]))]
+    # LUFS match: Measure A's Drop vs B's Drop
+    a_m = a["bass"][a_drop:min(a_drop + 4 * spb, len(a["bass"]))] + \
+          a["drums"][a_drop:min(a_drop + 4 * spb, len(a["drums"]))]
+    b_m = b["bass"][b_drop:min(b_drop + 4 * spb, len(b["bass"]))] + \
+          b["drums"][b_drop:min(b_drop + 4 * spb, len(b["drums"]))]
     gain = _lufs_gain(a_m, b_m, sr)
+    print(f"  LUFS gain applied to B: {gain:.3f}×")
 
     # B post-drop
     b_end      = min(b_drop + post_len, len(b["bass"]))
