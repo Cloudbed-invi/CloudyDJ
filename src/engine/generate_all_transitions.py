@@ -339,17 +339,10 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
     # A: find last complete word before swap → cut vocals there
     a_vocal_cut = dsp_utils.find_vocal_cutoff_in_buildup(
         a, max(0, a_swap - 8 * spb), a_swap, sr)
+    print(f"  A vocal cut at sample {a_vocal_cut} ({a_vocal_cut/sr:.2f}s)")
 
     # B: find first vocal onset after B's swap point
     b_vocal_entry = dsp_utils.find_vocal_entry(b["vocals"], b_swap, sr)
-
-    # Snap vocal cut to nearest downbeat to fix phrasing!
-    a_swap = dsp_utils.snap_to_nearest_downbeat(a_vocal_cut, a["beats"])
-    b_swap = dsp_utils.snap_to_nearest_downbeat(b_vocal_entry, b["beats"])
-    
-    print(f"  Vocal cutoff ending at {a_vocal_cut}")
-    print(f"  Snapped to beat at {a_swap}")
-    print(f"  A vocal cut at sample {a_swap} ({a_swap/sr:.2f}s)")
     print(f"  B vocal entry at sample {b_vocal_entry} ({b_vocal_entry/sr:.2f}s)")
 
     pre_len   = int(10 * sr)
@@ -532,7 +525,7 @@ def generate_treble_swap_transition(track_a_str, track_b_str, out_name):
     # ------------------------------------------------------------------
     a_pre_start = max(0, a_blend_start - pre_len)
     actual_pre  = a_blend_start - a_pre_start
-    out_pre_off  = pre_len - actual_pre
+    out_pre_off = pre_len - actual_pre
     if actual_pre > 0:
         for stem in ["drums", "bass", "other", "vocals"]:
             wl = _write_len(out, out_pre_off, a[stem], a_pre_start, a_blend_start)
@@ -565,14 +558,14 @@ def generate_treble_swap_transition(track_a_str, track_b_str, out_name):
         # B other: fade in
         out[pre_len:pre_len + n] += b["other"][b_blend_start:b_blend_start + n] * ep_in * gain
 
-        # B vocals: HPF reveal sweep (2000→200 Hz over the blend) - replaced with dry/wet to avoid chunking
+        # B vocals: HPF reveal sweep (2000→200 Hz over the blend)
         b_vocals_section = b["vocals"][b_blend_start:b_blend_start + n]
-        b_vocals_hpf = dsp_utils.apply_hpf(b_vocals_section, sr, 500)
-        wet = np.linspace(1.0, 0.0, n, dtype=np.float32)[:, None]
-        b_vocals_revealed = b_vocals_hpf * wet + b_vocals_section * (1.0 - wet)
+        b_vocals_revealed = dsp_utils.apply_hpf_sweep(b_vocals_section, sr,
+                                                       start_freq=2000, end_freq=200,
+                                                       num_chunks=16)
         out[pre_len:pre_len + n] += b_vocals_revealed * ep_in * gain
 
-        # B bass is completely muted during the blend to avoid clashing with A's bass.
+        # B bass is deliberately muted during the blend to avoid clashing with A's bass.
         # It will slam in immediately after the blend.
 
     # Echo tail from A's last vocal
@@ -623,10 +616,8 @@ def generate_drop_swap(track_a_str, track_b_str, out_name):
     sr     = a["sr"]
     spb    = int((60.0 / b["bpm"]) * sr)
 
-    a_drop = dsp_utils.snap_to_nearest_downbeat(_safe_beat(a["beats"], a["drop_idx"]), a["beats"])
-    b_drop = dsp_utils.snap_to_nearest_downbeat(_safe_beat(b["beats"], b["drop_idx"]), b["beats"])
-
-
+    a_drop = _safe_beat(a["beats"], a["drop_idx"])
+    b_drop = _safe_beat(b["beats"], b["drop_idx"])
 
     gap_len  = 0              # No gap, instant cut
     pre_len  = int(10 * sr)
@@ -749,19 +740,16 @@ def generate_loop_roll_tension(track_a_str, track_b_str, out_name):
             wl = _write_len(out, pre_len, a[stem], a_build_start, a_drop)
             out[pre_len:pre_len + wl] += a[stem][a_build_start:a_build_start + wl]
             
-        # Dry/Wet HPF Sweep on A's main stems over the 8-beat roll to make room
+        # HPF Sweep on A's main stems over the 8-beat roll to make room
         if roll_len > 0:
             sweep_start = pre_len + buildup_len - roll_len
-            # We filter A's section at 500Hz, and crossfade to it smoothly
+            # Apply HPF sweep from 20Hz up to 2000Hz over the 8 beats
             for stem in ["drums", "other", "bass", "vocals"]:
                 a_section = a[stem][a_drop - roll_len:a_drop]
-                a_hpf = dsp_utils.apply_hpf(a_section, sr, cutoff_hz=500)
-                fade_to_hpf = np.linspace(0.0, 1.0, roll_len, dtype=np.float32)[:, None]
-                a_swept = a_section * (1.0 - fade_to_hpf) + a_hpf * fade_to_hpf
-                
+                a_hpf = dsp_utils.apply_hpf_sweep(a_section, sr, start_freq=20, end_freq=2000, num_chunks=16)
                 # Replace the original with the swept version
                 out[sweep_start:sweep_start + roll_len] -= a_section
-                out[sweep_start:sweep_start + roll_len] += a_swept
+                out[sweep_start:sweep_start + roll_len] += a_hpf
 
     # ------------------------------------------------------------------
     # Loop roll — NEW: passes drum stem, returns stereo directly

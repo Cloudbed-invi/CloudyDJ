@@ -23,34 +23,6 @@ def _to_mono(audio):
     return audio.astype(np.float32)
 
 
-def snap_to_nearest_beat(sample_idx, beat_array):
-    if len(beat_array) == 0:
-        return sample_idx
-    dists = np.abs(beat_array - sample_idx)
-    return beat_array[np.argmin(dists)]
-
-
-def snap_to_nearest_downbeat(sample_idx, beat_array):
-    """
-    Snaps to the nearest beat that is a 'downbeat' (index modulo 4 == 0).
-    This ensures that phrasing (the 1 of a 4-beat measure) is maintained.
-    """
-    if len(beat_array) == 0:
-        return sample_idx
-    # Find the nearest beat
-    dists = np.abs(beat_array - sample_idx)
-    nearest_idx = np.argmin(dists)
-    # Move to the nearest downbeat
-    remainder = nearest_idx % 4
-    if remainder <= 1:
-        downbeat_idx = max(0, nearest_idx - remainder)
-    else:
-        downbeat_idx = min(len(beat_array) - 1, nearest_idx + (4 - remainder))
-    # Ensure the target index itself is a multiple of 4, but due to min/max it might not be if array length is not a multiple of 4.
-    downbeat_idx = downbeat_idx - (downbeat_idx % 4)
-    return beat_array[downbeat_idx]
-
-
 def _is_stereo(audio):
     return audio.ndim == 2 and audio.shape[1] == 2
 
