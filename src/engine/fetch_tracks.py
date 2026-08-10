@@ -6,7 +6,7 @@ import soundfile as sf
 import yt_dlp
 import numpy as np
 
-LIBRARY_DIR = "C:/Projects/Cloudy DJ 2.0/library"
+LIBRARY_DIR = "c:/Users/sriha/Documents/Cloudy DJ 2.0/library"
 CRATE_FILE = os.path.join(LIBRARY_DIR, "crate.json")
 
 def download_audio(url, title):
@@ -37,12 +37,13 @@ def separate_stems(file_path, output_dir):
 
 def separate_all_stems(file_path, output_dir):
     print(f"Separating ALL stems for {file_path}...")
+    env = os.environ.copy()
     subprocess.run([
         "C:/Projects/Cloudy DJ 2.0/env/Scripts/demucs.exe",
         "-n", "htdemucs",
         "-o", output_dir,
         file_path
-    ], check=True)
+    ], env=env, check=True)
 
 def update_crate(title, track_dir, bpm_hint=None):
     with open(CRATE_FILE, 'r') as f:
@@ -77,23 +78,15 @@ def update_crate(title, track_dir, bpm_hint=None):
     print(f"Added {title} to crate with BPM {round(bpm)}")
 
 if __name__ == "__main__":
-    import numpy as np
+    # 1. Elvis - Jailhouse Rock
+    elvis_file = os.path.join(LIBRARY_DIR, "Elvis_JailhouseRock.wav")
     
-    # 1. Tiesto - Secrets
-    secrets_url = "https://www.youtube.com/watch?v=Dr1nN__-2Po"
-    secrets_file = download_audio(secrets_url, "Tiesto_Secrets")
-    
-    # 2. Adele - Set Fire To The Rain
-    adele_url = "ytsearch1:Adele Set Fire To The Rain Acapella studio"
-    adele_file = download_audio(adele_url, "Adele_SetFire")
+    # 2. Enya - Orinoco Flow
+    enya_file = os.path.join(LIBRARY_DIR, "Enya_OrinocoFlow.wav")
     
     # Run Demucs
     demucs_out = os.path.join(LIBRARY_DIR, "demucs_output")
-    separate_all_stems(secrets_file, demucs_out)
-    separate_all_stems(adele_file, demucs_out)
+    separate_all_stems(elvis_file, demucs_out)
+    separate_all_stems(enya_file, demucs_out)
     
-    # Update Crate
-    update_crate("Tiesto - Secrets", os.path.join(demucs_out, "htdemucs", "Tiesto_Secrets"), 128)
-    update_crate("Adele - Set Fire To The Rain", os.path.join(demucs_out, "htdemucs", "Adele_SetFire"), 108)
-    
-    print("Fetch and separation complete!")
+    print("Fetch and separation complete! Run build_crate.py to add them to crate.")
