@@ -366,13 +366,7 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
         vocal_end_in_pre = min(a_vocal_cut, a_swap)
         if vocal_end_in_pre > a_pre_start:
             wl = _write_len(out, out_pre_off, a["vocals"], a_pre_start, vocal_end_in_pre)
-            vocal_chunk = a["vocals"][a_pre_start:a_pre_start + wl].copy()
-            # 100ms fade out to avoid a hard snap/pop at the cut point
-            fade_samples = min(int(0.1 * sr), len(vocal_chunk))
-            if fade_samples > 0:
-                fade = np.linspace(1.0, 0.0, fade_samples, dtype=np.float32)[:, None]
-                vocal_chunk[-fade_samples:] *= fade
-            out[out_pre_off:out_pre_off + wl] += vocal_chunk
+            out[out_pre_off:out_pre_off + wl] += a["vocals"][a_pre_start:a_pre_start + wl]
 
     # Add echo tail to A's cut vocal
     if a_vocal_cut > spb:
@@ -625,10 +619,10 @@ def generate_drop_swap(track_a_str, track_b_str, out_name):
     a_drop = _safe_beat(a["beats"], a["drop_idx"])
     b_drop = _safe_beat(b["beats"], b["drop_idx"])
 
-    gap_len  = spb              # 1-beat tension gap
+    gap_len  = 0              # No gap, instant cut
     pre_len  = int(10 * sr)
     post_len = int(10 * sr)
-    total    = pre_len + gap_len + post_len
+    total    = pre_len + post_len
     out      = np.zeros((total, 2), dtype=np.float32)
 
     # Pre: 10 s of A up to drop
@@ -641,25 +635,19 @@ def generate_drop_swap(track_a_str, track_b_str, out_name):
             out[off:off + wl] += a[stem][a_pre_start:a_pre_start + wl]
 
     # ------------------------------------------------------------------
-    # Tension gap: 1 beat of white noise riser + reverb tail from A
+    # Background tension riser under A's last 8 beats
     # ------------------------------------------------------------------
+    riser_beats = min(8, int(actual_pre / spb))
+    if riser_beats > 0:
+        riser_samples = riser_beats * spb
+        riser = dsp_utils.generate_tension_riser(riser_samples, sr)
+        riser_stereo = np.stack([riser, riser], axis=1)
+        riser_start = pre_len - riser_samples
+        out[riser_start:pre_len] += riser_stereo * 0.7
+
+    # Echo tail from A's last vocal
     last_beat  = max(0, a_drop - spb)
     vocal_snip = a["vocals"][last_beat:a_drop]
-    reverb_tail = dsp_utils.generate_reverb_tail(vocal_snip, sr, decay_seconds=1.0)
-    
-    # Generate the EDM tension riser
-    riser = dsp_utils.generate_tension_riser(gap_len, sr)
-    riser_stereo = np.stack([riser, riser], axis=1)
-    
-    rt_len = min(len(reverb_tail), gap_len)
-    if rt_len > 0:
-        if reverb_tail.ndim == 1:
-            reverb_stereo = np.stack([reverb_tail, reverb_tail], axis=1)
-        else:
-            reverb_stereo = reverb_tail
-        out[pre_len:pre_len + rt_len] += reverb_stereo[:rt_len] * 0.5
-        
-    out[pre_len:pre_len + gap_len] += riser_stereo * 0.7
 
     # LUFS match: Measure A's Drop vs B's Drop
     a_m = a["bass"][a_drop:min(a_drop + 4 * spb, len(a["bass"]))] + \
@@ -669,13 +657,20 @@ def generate_drop_swap(track_a_str, track_b_str, out_name):
     gain = _lufs_gain(a_m, b_m, sr)
     print(f"  LUFS gain applied to B: {gain:.3f}×")
 
-    # Post: B from its drop (after the gap)
-    b_start_out = pre_len + gap_len
+    # Post: B from its drop (instant slam)
+    b_start_out = pre_len
     b_end       = min(b_drop + post_len, len(b["bass"]))
     wl          = b_end - b_drop
     if wl > 0:
         for stem in ["drums", "bass", "other", "vocals"]:
             out[b_start_out:b_start_out + wl] += b[stem][b_drop:b_drop + wl] * gain
+
+    # Add Impact Downlifter on B's drop
+    downlifter = dsp_utils.generate_impact_downlifter(int(8 * spb), sr)
+    dl_stereo  = np.stack([downlifter, downlifter], axis=1)
+    dl_len     = min(len(dl_stereo), post_len)
+    if dl_len > 0:
+        out[b_start_out:b_start_out + dl_len] += dl_stereo[:dl_len]
 
     # Echo tail from A's last vocal over B
     echo_tail = dsp_utils.generate_echo_tail(vocal_snip, sr, b["bpm"], beats=4)
@@ -745,15 +740,16 @@ def generate_loop_roll_tension(track_a_str, track_b_str, out_name):
             wl = _write_len(out, pre_len, a[stem], a_build_start, a_drop)
             out[pre_len:pre_len + wl] += a[stem][a_build_start:a_build_start + wl]
             
-        # Bass fade out in the last 4 beats
-        bass_fade_len = min(buildup_len, 4 * spb)
-        if bass_fade_len > 0:
-            fade_start = pre_len + buildup_len - bass_fade_len
-            fade = np.linspace(1.0, 0.0, bass_fade_len, dtype=np.float32)[:, None]
-            # Replace the bass in the last 4 beats with faded bass
-            a_bass_section = a["bass"][a_drop - bass_fade_len:a_drop]
-            out[fade_start:fade_start + bass_fade_len] -= a_bass_section # subtract original
-            out[fade_start:fade_start + bass_fade_len] += a_bass_section * fade # add faded
+        # HPF Sweep on A's main stems over the 8-beat roll to make room
+        if roll_len > 0:
+            sweep_start = pre_len + buildup_len - roll_len
+            # Apply HPF sweep from 20Hz up to 2000Hz over the 8 beats
+            for stem in ["drums", "other", "bass", "vocals"]:
+                a_section = a[stem][a_drop - roll_len:a_drop]
+                a_hpf = dsp_utils.apply_hpf_sweep(a_section, sr, start_freq=20, end_freq=2000, num_chunks=16)
+                # Replace the original with the swept version
+                out[sweep_start:sweep_start + roll_len] -= a_section
+                out[sweep_start:sweep_start + roll_len] += a_hpf
 
     # ------------------------------------------------------------------
     # Loop roll — NEW: passes drum stem, returns stereo directly
@@ -774,7 +770,8 @@ def generate_loop_roll_tension(track_a_str, track_b_str, out_name):
     roll_start = pre_len + norm_build_len
     roll_wl    = min(len(roll_stereo), roll_len)
     if roll_wl > 0:
-        out[roll_start:roll_start + roll_wl] += roll_stereo[:roll_wl]
+        # Layer loop roll at 0.7 volume so it doesn't clip
+        out[roll_start:roll_start + roll_wl] += roll_stereo[:roll_wl] * 0.7
 
     # LUFS match: Measure A's Drop vs B's Drop
     a_m = a["bass"][a_drop:min(a_drop + 4 * spb, len(a["bass"]))] + \
@@ -791,6 +788,13 @@ def generate_loop_roll_tension(track_a_str, track_b_str, out_name):
     if wl > 0:
         for stem in ["drums", "bass", "other", "vocals"]:
             out[post_start:post_start + wl] += b[stem][b_drop:b_drop + wl] * gain
+            
+    # Add Impact Downlifter on B's drop
+    downlifter = dsp_utils.generate_impact_downlifter(int(8 * spb), sr)
+    dl_stereo  = np.stack([downlifter, downlifter], axis=1)
+    dl_len     = min(len(dl_stereo), post_len)
+    if dl_len > 0:
+        out[post_start:post_start + dl_len] += dl_stereo[:dl_len]
 
     out_path = os.path.join(OUTPUT_DIR, out_name)
     sf.write(out_path, normalize(out), sr)

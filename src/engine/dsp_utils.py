@@ -247,7 +247,30 @@ def generate_tension_riser(length_samples, sr):
                 
     return (out_noise * envelope).astype(np.float32)
 
-
+def generate_impact_downlifter(length_samples, sr):
+    """Massive white-noise crash that fades out exponentially. LPF sweeps down."""
+    noise = np.random.normal(0, 1, length_samples).astype(np.float32)
+    # Exponential fade out
+    progress = np.linspace(0.0, 1.0, length_samples, dtype=np.float32)
+    envelope = ((1.0 - progress) ** 3) * 0.5  # Max amplitude 0.5, fast decay
+    
+    nyq = 0.5 * sr
+    out_noise = np.zeros_like(noise)
+    chunk_size = 2048
+    for i in range(0, len(noise), chunk_size):
+        end = min(i + chunk_size, len(noise))
+        p = i / max(1, len(noise))
+        # LPF sweeps from 8kHz down to 100Hz
+        cutoff = max(100, min(8000 - p * 7900, nyq * 0.95))
+        b, a = signal.butter(2, cutoff / nyq, btype='low')
+        chunk = noise[i:end]
+        if end - i > 12:
+            try:
+                out_noise[i:end] = signal.filtfilt(b, a, chunk)
+            except Exception:
+                out_noise[i:end] = chunk
+                
+    return (out_noise * envelope).astype(np.float32)
 
 # ---------------------------------------------------------------------------
 # Sidechain duck
