@@ -368,6 +368,20 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
             wl = _write_len(out, out_pre_off, a["vocals"], a_pre_start, vocal_end_in_pre)
             out[out_pre_off:out_pre_off + wl] += a["vocals"][a_pre_start:a_pre_start + wl]
 
+    # Add echo tail to A's cut vocal
+    if a_vocal_cut > spb:
+        vocal_snip = a["vocals"][a_vocal_cut - spb:a_vocal_cut]
+        echo_tail  = dsp_utils.generate_echo_tail(vocal_snip, sr, b["bpm"], beats=4)
+        if echo_tail.ndim == 1:
+            echo_stereo = np.stack([echo_tail, echo_tail], axis=1)
+        else:
+            echo_stereo = echo_tail
+        # Find where a_vocal_cut lands in the output buffer
+        out_vocal_cut = pre_len - (a_swap - a_vocal_cut)
+        tail_len = min(len(echo_stereo), total_len - out_vocal_cut)
+        if tail_len > 0 and out_vocal_cut >= 0:
+            out[out_vocal_cut:out_vocal_cut + tail_len] += echo_stereo[:tail_len] * 0.7
+
     # White noise sweep centred on the swap point to mask the cut
     noise_len    = min(int(1.5 * spb), pre_len // 2)
     noise_mono   = dsp_utils.generate_white_noise_sweep(noise_len, sr)
@@ -532,9 +546,10 @@ def generate_treble_swap_transition(track_a_str, track_b_str, out_name):
     ep_in    = np.sin(t)[:, None]   # B fades in
 
     if n > 0:
-        # A: all stems fade out with equal-power curve
-        for stem in ["drums", "bass", "other", "vocals"]:
+        # A drums, other, vocals fade out. A BASS stays FULL.
+        for stem in ["drums", "other", "vocals"]:
             out[pre_len:pre_len + n] += a[stem][a_blend_start:a_blend_start + n] * ep_out
+        out[pre_len:pre_len + n] += a["bass"][a_blend_start:a_blend_start + n]
 
         # B drums: HPF'd at 250 Hz to strip kick sub, fade in
         b_drums_section = b["drums"][b_blend_start:b_blend_start + n]
@@ -551,13 +566,8 @@ def generate_treble_swap_transition(track_a_str, track_b_str, out_name):
                                                        num_chunks=16)
         out[pre_len:pre_len + n] += b_vocals_revealed * ep_in * gain
 
-        # B bass: enters in the last 4 beats only
-        bass_in_beats = min(n, 4 * spb)
-        bass_fade = np.concatenate([
-            np.zeros(max(0, n - bass_in_beats), dtype=np.float32),
-            np.linspace(0.0, 1.0, min(bass_in_beats, n), dtype=np.float32)
-        ])[:, None] * gain
-        out[pre_len:pre_len + n] += b["bass"][b_blend_start:b_blend_start + n] * bass_fade
+        # B bass is deliberately muted during the blend to avoid clashing with A's bass.
+        # It will slam in immediately after the blend.
 
     # Echo tail from A's last vocal
     vocal_snip = a["vocals"][max(0, a_blend_start - spb):a_blend_start]
@@ -626,11 +636,16 @@ def generate_drop_swap(track_a_str, track_b_str, out_name):
             out[off:off + wl] += a[stem][a_pre_start:a_pre_start + wl]
 
     # ------------------------------------------------------------------
-    # Tension gap: 1 beat of near-silence with reverb tail from A
+    # Tension gap: 1 beat of white noise riser + reverb tail from A
     # ------------------------------------------------------------------
     last_beat  = max(0, a_drop - spb)
     vocal_snip = a["vocals"][last_beat:a_drop]
     reverb_tail = dsp_utils.generate_reverb_tail(vocal_snip, sr, decay_seconds=1.0)
+    
+    # Generate the EDM tension riser
+    riser = dsp_utils.generate_tension_riser(gap_len, sr)
+    riser_stereo = np.stack([riser, riser], axis=1)
+    
     rt_len = min(len(reverb_tail), gap_len)
     if rt_len > 0:
         if reverb_tail.ndim == 1:
@@ -638,6 +653,8 @@ def generate_drop_swap(track_a_str, track_b_str, out_name):
         else:
             reverb_stereo = reverb_tail
         out[pre_len:pre_len + rt_len] += reverb_stereo[:rt_len] * 0.5
+        
+    out[pre_len:pre_len + gap_len] += riser_stereo * 0.7
 
     # LUFS match
     a_m = a["bass"][max(0, a_drop - 4 * spb):a_drop]
@@ -714,21 +731,21 @@ def generate_loop_roll_tension(track_a_str, track_b_str, out_name):
             wl = _write_len(out, off, a[stem], a_pre_start, a_build_start)
             out[off:off + wl] += a[stem][a_pre_start:a_pre_start + wl]
 
-    # Buildup (bass fades last 4 beats)
-    if norm_build_len > 0:
-        bass_full = max(0, norm_build_len - 4 * spb)
-        bass_fade = norm_build_len - bass_full
-        for stem in ["drums", "other", "vocals"]:
-            wl = _write_len(out, pre_len, a[stem], a_build_start, a_build_start + norm_build_len)
+    # Buildup (A plays fully for the entire buildup)
+    if buildup_len > 0:
+        for stem in ["drums", "other", "vocals", "bass"]:
+            wl = _write_len(out, pre_len, a[stem], a_build_start, a_drop)
             out[pre_len:pre_len + wl] += a[stem][a_build_start:a_build_start + wl]
-        if bass_full > 0:
-            wl = _write_len(out, pre_len, a["bass"], a_build_start, a_build_start + bass_full)
-            out[pre_len:pre_len + wl] += a["bass"][a_build_start:a_build_start + wl]
-        if bass_fade > 0:
-            fade = np.linspace(1.0, 0.0, bass_fade, dtype=np.float32)[:, None]
-            bs   = a_build_start + bass_full
-            wl   = _write_len(out, pre_len + bass_full, a["bass"], bs, bs + bass_fade)
-            out[pre_len + bass_full:pre_len + bass_full + wl] += a["bass"][bs:bs + wl] * fade[:wl]
+            
+        # Bass fade out in the last 4 beats
+        bass_fade_len = min(buildup_len, 4 * spb)
+        if bass_fade_len > 0:
+            fade_start = pre_len + buildup_len - bass_fade_len
+            fade = np.linspace(1.0, 0.0, bass_fade_len, dtype=np.float32)[:, None]
+            # Replace the bass in the last 4 beats with faded bass
+            a_bass_section = a["bass"][a_drop - bass_fade_len:a_drop]
+            out[fade_start:fade_start + bass_fade_len] -= a_bass_section # subtract original
+            out[fade_start:fade_start + bass_fade_len] += a_bass_section * fade # add faded
 
     # ------------------------------------------------------------------
     # Loop roll — NEW: passes drum stem, returns stereo directly

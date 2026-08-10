@@ -200,11 +200,11 @@ def generate_echo_tail(audio_chunk, sr, bpm, beats=4):
 
 
 # ---------------------------------------------------------------------------
-# White noise riser
+# White noise sweeps / risers
 # ---------------------------------------------------------------------------
 
 def generate_white_noise_sweep(length_samples, sr):
-    """Synthesised HPF-swept white noise riser for pre-drop tension."""
+    """Synthesised HPF-swept white noise for masking cuts (fade in and out)."""
     noise = np.random.normal(0, 1, length_samples).astype(np.float32)
     fade_in  = np.linspace(0.0, 1.0, length_samples, dtype=np.float32)
     fade_out = np.linspace(1.0, 0.0, length_samples, dtype=np.float32)
@@ -221,6 +221,32 @@ def generate_white_noise_sweep(length_samples, sr):
         if end - i > 12:
             out_noise[i:end] = signal.filtfilt(b, a, chunk)
     return (out_noise * envelope * 0.12).astype(np.float32)
+
+def generate_tension_riser(length_samples, sr):
+    """Classic EDM white-noise riser: fades in exponentially, sweeps HPF up."""
+    noise = np.random.normal(0, 1, length_samples).astype(np.float32)
+    # Exponential fade in for more tension at the very end
+    progress = np.linspace(0.0, 1.0, length_samples, dtype=np.float32)
+    envelope = (progress ** 2) * 0.4  # Max amplitude 0.4
+    
+    nyq = 0.5 * sr
+    out_noise = np.zeros_like(noise)
+    chunk_size = 2048
+    for i in range(0, len(noise), chunk_size):
+        end = min(i + chunk_size, len(noise))
+        p = i / max(1, len(noise))
+        # HPF sweeps from 500Hz to 10kHz
+        cutoff = max(100, min(500 + p * 9500, nyq * 0.95))
+        b, a = signal.butter(2, cutoff / nyq, btype='high')
+        chunk = noise[i:end]
+        if end - i > 12:
+            try:
+                out_noise[i:end] = signal.filtfilt(b, a, chunk)
+            except Exception:
+                out_noise[i:end] = chunk
+                
+    return (out_noise * envelope).astype(np.float32)
+
 
 
 # ---------------------------------------------------------------------------
