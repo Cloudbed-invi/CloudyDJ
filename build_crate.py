@@ -12,7 +12,9 @@ base_dir = os.path.abspath(".")
 
 tracks = [
     ("Tiesto_Secrets", "library/Tiesto_Secrets.wav", "library/demucs_output/htdemucs/Tiesto_Secrets"),
-    ("James_Hype_Wild", "library/James_Hype_Wild.wav", "library/demucs_output/htdemucs/James_Hype_Wild")
+    ("James_Hype_Wild", "library/James_Hype_Wild.wav", "library/demucs_output/htdemucs/James_Hype_Wild"),
+    ("Elvis_JailhouseRock", "library/Elvis_JailhouseRock.wav", "library/demucs_output/htdemucs/Elvis_JailhouseRock"),
+    ("Enya_OrinocoFlow", "library/Enya_OrinocoFlow.wav", "library/demucs_output/htdemucs/Enya_OrinocoFlow")
 ]
 
 crate = {}

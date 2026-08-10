@@ -339,10 +339,17 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
     # A: find last complete word before swap → cut vocals there
     a_vocal_cut = dsp_utils.find_vocal_cutoff_in_buildup(
         a, max(0, a_swap - 8 * spb), a_swap, sr)
-    print(f"  A vocal cut at sample {a_vocal_cut} ({a_vocal_cut/sr:.2f}s)")
 
     # B: find first vocal onset after B's swap point
     b_vocal_entry = dsp_utils.find_vocal_entry(b["vocals"], b_swap, sr)
+
+    # Snap vocal cut to nearest downbeat to fix phrasing!
+    a_swap = dsp_utils.snap_to_nearest_downbeat(a_vocal_cut, a["beats"])
+    b_swap = dsp_utils.snap_to_nearest_downbeat(b_vocal_entry, b["beats"])
+    
+    print(f"  Vocal cutoff ending at {a_vocal_cut}")
+    print(f"  Snapped to beat at {a_swap}")
+    print(f"  A vocal cut at sample {a_swap} ({a_swap/sr:.2f}s)")
     print(f"  B vocal entry at sample {b_vocal_entry} ({b_vocal_entry/sr:.2f}s)")
 
     pre_len   = int(10 * sr)
@@ -362,11 +369,16 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
         for stem in ["drums", "bass", "other"]:
             wl = _write_len(out, out_pre_off, a[stem], a_pre_start, a_swap)
             out[out_pre_off:out_pre_off + wl] += a[stem][a_pre_start:a_pre_start + wl]
-        # A vocals: play only up to the Whisper cut point
+        # A vocals: play only up to the Whisper cut point with a 250ms fade out
         vocal_end_in_pre = min(a_vocal_cut, a_swap)
         if vocal_end_in_pre > a_pre_start:
             wl = _write_len(out, out_pre_off, a["vocals"], a_pre_start, vocal_end_in_pre)
-            out[out_pre_off:out_pre_off + wl] += a["vocals"][a_pre_start:a_pre_start + wl]
+            vocal_chunk = a["vocals"][a_pre_start:a_pre_start + wl].copy()
+            fade_samples = min(int(0.25 * sr), len(vocal_chunk))
+            if fade_samples > 0:
+                fade = np.linspace(1.0, 0.0, fade_samples, dtype=np.float32).reshape(-1, 1)
+                vocal_chunk[-fade_samples:] *= fade
+            out[out_pre_off:out_pre_off + wl] += vocal_chunk
 
     # Add echo tail to A's cut vocal
     if a_vocal_cut > spb:
@@ -495,7 +507,10 @@ def generate_treble_swap_transition(track_a_str, track_b_str, out_name):
         a_blend_start = max(0, len(a["drums"]) - 32 * spb)
     a_blend_start = int(np.clip(a_blend_start, 0, len(a["drums"]) - 2))
 
-    b_blend_start = dsp_utils.find_instrumental_intro(b, sr)
+    # We want B to drop exactly when the 16-beat blend ends.
+    # So B's start point is 16 beats BEFORE its drop.
+    b_drop = _safe_beat(b["beats"], b["drop_idx"])
+    b_blend_start = max(0, b_drop - 16 * spb)
 
     blend_beats = 16
     blend_len   = blend_beats * spb
@@ -546,9 +561,11 @@ def generate_treble_swap_transition(track_a_str, track_b_str, out_name):
     ep_in    = np.sin(t)[:, None]   # B fades in
 
     if n > 0:
-        # A: all stems fade out with equal-power curve
-        for stem in ["drums", "bass", "other", "vocals"]:
+        # A: Treble stems fade out with equal-power curve, Bass stays 100%
+        for stem in ["drums", "other", "vocals"]:
             out[pre_len:pre_len + n] += a[stem][a_blend_start:a_blend_start + n] * ep_out
+            
+        out[pre_len:pre_len + n] += a["bass"][a_blend_start:a_blend_start + n]
 
         # B drums: HPF'd at 250 Hz to strip kick sub, fade in
         b_drums_section = b["drums"][b_blend_start:b_blend_start + n]
@@ -665,12 +682,7 @@ def generate_drop_swap(track_a_str, track_b_str, out_name):
         for stem in ["drums", "bass", "other", "vocals"]:
             out[b_start_out:b_start_out + wl] += b[stem][b_drop:b_drop + wl] * gain
 
-    # Add Impact Downlifter on B's drop
-    downlifter = dsp_utils.generate_impact_downlifter(int(8 * spb), sr)
-    dl_stereo  = np.stack([downlifter, downlifter], axis=1)
-    dl_len     = min(len(dl_stereo), post_len)
-    if dl_len > 0:
-        out[b_start_out:b_start_out + dl_len] += dl_stereo[:dl_len]
+    # (Removed Impact Downlifter to make the drop cleaner)
 
     # Echo tail from A's last vocal over B
     echo_tail = dsp_utils.generate_echo_tail(vocal_snip, sr, b["bpm"], beats=4)
@@ -740,16 +752,21 @@ def generate_loop_roll_tension(track_a_str, track_b_str, out_name):
             wl = _write_len(out, pre_len, a[stem], a_build_start, a_drop)
             out[pre_len:pre_len + wl] += a[stem][a_build_start:a_build_start + wl]
             
-        # HPF Sweep on A's main stems over the 8-beat roll to make room
+        # HPF Crossfade on A's main stems over the 8-beat roll to make room
         if roll_len > 0:
             sweep_start = pre_len + buildup_len - roll_len
-            # Apply HPF sweep from 20Hz up to 2000Hz over the 8 beats
+            # Apply smooth dry/wet crossfade into a 500Hz HPF
+            crossfade = np.linspace(0.0, 1.0, roll_len, dtype=np.float32)
+            if a["drums"].ndim == 2:
+                crossfade = crossfade[:, None]
+                
             for stem in ["drums", "other", "bass", "vocals"]:
                 a_section = a[stem][a_drop - roll_len:a_drop]
-                a_hpf = dsp_utils.apply_hpf_sweep(a_section, sr, start_freq=20, end_freq=2000, num_chunks=16)
-                # Replace the original with the swept version
+                a_hpf = dsp_utils.apply_hpf(a_section, sr, cutoff_hz=500)
+                a_blended = a_section * (1.0 - crossfade) + a_hpf * crossfade
+                # Replace the original with the blended version
                 out[sweep_start:sweep_start + roll_len] -= a_section
-                out[sweep_start:sweep_start + roll_len] += a_hpf
+                out[sweep_start:sweep_start + roll_len] += a_blended
 
     # ------------------------------------------------------------------
     # Loop roll — NEW: passes drum stem, returns stereo directly
@@ -806,9 +823,9 @@ def generate_loop_roll_tension(track_a_str, track_b_str, out_name):
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    # Edit these to match tracks in your crate.json
-    TRACK_A = "Tiesto_Secrets"
-    TRACK_B = "James_Hype_Wild"
+    # Edit these to match    # Hardcode paths to crate data
+    TRACK_A = "Elvis_JailhouseRock"
+    TRACK_B = "Enya_OrinocoFlow"
 
     a_tag = TRACK_A.split()[-1]
     b_tag = TRACK_B.split()[-1]

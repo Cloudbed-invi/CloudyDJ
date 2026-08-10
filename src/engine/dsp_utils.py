@@ -389,6 +389,27 @@ def find_best_loop_source(track_data, drop_sample, bpm, sr):
     return onset_sample, onset_sample + samples_per_beat
 
 
+def snap_to_nearest_downbeat(sample_idx, beat_times, sr=44100):
+    """
+    Given a sample index and a list of beat times (in seconds),
+    find the nearest 'downbeat' (1-beat of a 4-beat bar) and return its sample index.
+    Assumes beat_times[0] is a downbeat, and every 4th beat thereafter is a downbeat.
+    """
+    if len(beat_times) == 0:
+        return sample_idx
+        
+    # Get downbeat times (every 4th beat starting from 0)
+    downbeat_times = [beat_times[i] for i in range(0, len(beat_times), 4)]
+    
+    # Convert sample_idx to seconds
+    target_time = sample_idx / sr
+    
+    # Find the nearest downbeat time
+    nearest_downbeat_time = min(downbeat_times, key=lambda t: abs(t - target_time))
+    
+    # Return it as a sample index
+    return int(nearest_downbeat_time * sr)
+
 # ---------------------------------------------------------------------------
 # Instrumental intro finder
 # ---------------------------------------------------------------------------

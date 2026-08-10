@@ -6,7 +6,7 @@ import soundfile as sf
 import yt_dlp
 import numpy as np
 
-LIBRARY_DIR = "C:/Projects/Cloudy DJ 2.0/library"
+LIBRARY_DIR = "C:/Users/sriha/Documents/Cloudy DJ 2.0/library"
 CRATE_FILE = os.path.join(LIBRARY_DIR, "crate.json")
 
 def download_audio(url, title):
@@ -38,7 +38,8 @@ def separate_stems(file_path, output_dir):
 def separate_all_stems(file_path, output_dir):
     print(f"Separating ALL stems for {file_path}...")
     subprocess.run([
-        "C:/Projects/Cloudy DJ 2.0/env/Scripts/demucs.exe",
+        "conda", "run", "-n", "cloudy_dj",
+        "demucs",
         "-n", "htdemucs",
         "-o", output_dir,
         file_path
@@ -79,21 +80,17 @@ def update_crate(title, track_dir, bpm_hint=None):
 if __name__ == "__main__":
     import numpy as np
     
-    # 1. Tiesto - Secrets
-    secrets_url = "https://www.youtube.com/watch?v=Dr1nN__-2Po"
-    secrets_file = download_audio(secrets_url, "Tiesto_Secrets")
+    # 3. Elvis - Jailhouse Rock
+    elvis_url = "ytsearch1:Elvis Presley - Jailhouse Rock (Official Audio)"
+    elvis_file = download_audio(elvis_url, "Elvis_JailhouseRock")
     
-    # 2. Adele - Set Fire To The Rain
-    adele_url = "ytsearch1:Adele Set Fire To The Rain Acapella studio"
-    adele_file = download_audio(adele_url, "Adele_SetFire")
+    # 4. Enya - Orinoco Flow
+    enya_url = "ytsearch1:Enya - Orinoco Flow (Official 4k Music Video)"
+    enya_file = download_audio(enya_url, "Enya_OrinocoFlow")
     
     # Run Demucs
     demucs_out = os.path.join(LIBRARY_DIR, "demucs_output")
-    separate_all_stems(secrets_file, demucs_out)
-    separate_all_stems(adele_file, demucs_out)
+    separate_all_stems(elvis_file, demucs_out)
+    separate_all_stems(enya_file, demucs_out)
     
-    # Update Crate
-    update_crate("Tiesto - Secrets", os.path.join(demucs_out, "htdemucs", "Tiesto_Secrets"), 128)
-    update_crate("Adele - Set Fire To The Rain", os.path.join(demucs_out, "htdemucs", "Adele_SetFire"), 108)
-    
-    print("Fetch and separation complete!")
+    print("Fetch and separation complete! Now run build_crate.py to analyze structure and update crate.json.")
