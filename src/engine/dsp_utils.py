@@ -429,3 +429,112 @@ def find_vocal_cutoff_in_buildup(track_data, build_start, drop_sample, sr):
     fallback = max(build_start, drop_sample - 2 * spb)
     print(f"  Vocal cutoff fallback: 2 beats before drop at {fallback}")
     return fallback
+
+
+# ---------------------------------------------------------------------------
+# Vocal entry point finder (for B track)
+# ---------------------------------------------------------------------------
+
+def find_vocal_entry(vocal_stem, start_sample, sr):
+    """
+    Find the first vocal onset AFTER start_sample using Whisper.
+    Returns the sample position of the first detected word start.
+    Falls back to RMS onset detection if Whisper fails.
+    """
+    mono = _to_mono(vocal_stem)
+
+    # Search up to 20 seconds after start_sample
+    search_end = min(start_sample + int(20 * sr), len(mono))
+    search_audio = mono[start_sample:search_end]
+
+    if len(search_audio) < int(0.5 * sr):
+        return start_sample
+
+    try:
+        whisper_sr = 16000
+        search_16k = librosa.resample(search_audio, orig_sr=sr, target_sr=whisper_sr)
+        import whisper
+        model = whisper.load_model("tiny", device="cpu")
+        result = whisper.transcribe(model, search_16k,
+                                    language="en", word_timestamps=True)
+        words = [w for seg in result.get("segments", [])
+                   for w in seg.get("words", [])]
+
+        if words:
+            first_word = words[0]
+            entry = start_sample + int(first_word["start"] * sr)
+            print(f"  B vocal entry: '{first_word['word'].strip()}' at "
+                  f"{first_word['start']:.2f}s after swap point")
+            return entry
+
+    except Exception as e:
+        print(f"  Whisper vocal entry failed: {e}")
+
+    # Fallback: RMS-based onset detection
+    rms = librosa.feature.rms(y=search_audio, frame_length=2048, hop_length=512)[0]
+    if np.max(rms) > 0:
+        rms = rms / np.max(rms)
+    for i, r in enumerate(rms):
+        if r > 0.08:
+            entry = start_sample + librosa.frames_to_samples(i, hop_length=512)
+            print(f"  B vocal entry (RMS fallback) at sample {entry}")
+            return entry
+
+    print(f"  B vocal entry: no vocals found, using start_sample")
+    return start_sample
+
+
+# ---------------------------------------------------------------------------
+# Stem length alignment
+# ---------------------------------------------------------------------------
+
+def truncate_stems_to_match(track_data):
+    """
+    After warping, each stem may differ by a few samples due to vocoder
+    non-determinism.  Truncate all to the shortest length to prevent
+    cumulative beat drift.
+    """
+    stems = ["vocals", "drums", "bass", "other"]
+    min_len = min(len(track_data[s]) for s in stems)
+    for s in stems:
+        track_data[s] = track_data[s][:min_len]
+    return track_data
+
+
+# ---------------------------------------------------------------------------
+# Simple reverb tail (convolution with exponential decay)
+# ---------------------------------------------------------------------------
+
+def generate_reverb_tail(audio_chunk, sr, decay_seconds=1.5):
+    """
+    Create a simple reverb tail by convolving with an exponential decay IR.
+    Returns the tail only (no dry signal).
+    """
+    mono = _to_mono(audio_chunk)
+    if len(mono) == 0 or np.max(np.abs(mono)) < 1e-6:
+        ir_len = int(decay_seconds * sr)
+        if _is_stereo(audio_chunk):
+            return np.zeros((ir_len, 2), dtype=np.float32)
+        return np.zeros(ir_len, dtype=np.float32)
+
+    # Generate exponential decay impulse response
+    ir_len = int(decay_seconds * sr)
+    ir = np.random.randn(ir_len).astype(np.float32) * 0.01
+    decay = np.exp(-np.linspace(0, 8, ir_len)).astype(np.float32)
+    ir *= decay
+
+    # Convolve
+    wet = np.convolve(mono, ir, mode='full').astype(np.float32)
+
+    # Return only the tail portion (after the dry signal ends)
+    tail = wet[len(mono):]
+
+    if _is_stereo(audio_chunk):
+        # Slight L/R decorrelation for width
+        ir_r = np.random.randn(ir_len).astype(np.float32) * 0.01 * decay
+        wet_r = np.convolve(mono, ir_r, mode='full').astype(np.float32)
+        tail_r = wet_r[len(mono):]
+        min_t = min(len(tail), len(tail_r))
+        return np.stack([tail[:min_t], tail_r[:min_t]], axis=1)
+
+    return tail
