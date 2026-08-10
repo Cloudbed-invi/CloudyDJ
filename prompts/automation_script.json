@@ -1,0 +1,64 @@
+{
+  "track_a_start_beat": 193,
+  "track_a_end_beat": 257,
+  "track_b_start_beat": 246,
+  "track_b_end_beat": 310,
+  "actions": [
+    {
+      "track": "B",
+      "stem": "bass",
+      "beat_start": 0,
+      "beat_end": 32,
+      "effect": "hpf_sweep_down"
+    },
+    {
+      "track": "A",
+      "stem": "bass",
+      "beat_start": 32,
+      "beat_end": 64,
+      "effect": "hpf_sweep_up"
+    },
+    {
+      "track": "B",
+      "stem": "drums",
+      "beat_start": 16,
+      "beat_end": 32,
+      "effect": "fade_in"
+    },
+    {
+      "track": "B",
+      "stem": "other",
+      "beat_start": 0,
+      "beat_end": 32,
+      "effect": "fade_in"
+    },
+    {
+      "track": "B",
+      "stem": "vocals",
+      "beat_start": 0,
+      "beat_end": 32,
+      "effect": "fade_in"
+    },
+    {
+      "track": "A",
+      "stem": "other",
+      "beat_start": 32,
+      "beat_end": 64,
+      "effect": "echo_out"
+    },
+    {
+      "track": "A",
+      "stem": "drums",
+      "beat_start": 48,
+      "beat_end": 64,
+      "effect": "fade_out"
+    },
+    {
+      "track": "A",
+      "stem": "vocals",
+      "beat_start": 32,
+      "beat_end": 48,
+      "effect": "reverb_throw"
+    }
+  ]
+}

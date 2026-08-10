@@ -1,0 +1,2362 @@
+You are an expert AI DJ. You need to design a stem-level transition between two songs.
+
+Context for this mix: Mid-set, maintain energy
+
+### Track A (Playing)
+{
+  "title": "Alan Walker - Faded",
+  "bpm": 90.66611842105263,
+  "duration_beats": 282,
+  "phrase_boundaries": [
+    0,
+    16,
+    32,
+    48,
+    64,
+    80,
+    96,
+    112,
+    128,
+    144,
+    160,
+    176,
+    192,
+    208,
+    224,
+    240,
+    256,
+    272
+  ],
+  "key": "F# major",
+  "camelot": "2B",
+  "energy_curve_per_phrase": [
+    0.76,
+    1.52,
+    1.59,
+    1.77,
+    1.9,
+    2.96,
+    3.08,
+    3.07,
+    3.1,
+    2.04,
+    1.83,
+    2.05,
+    2.36,
+    2.3,
+    2.79,
+    2.96,
+    3.03
+  ],
+  "vocal_density_per_phrase": [
+    0.0,
+    1.13,
+    1.0,
+    0.77,
+    1.13,
+    1.08,
+    1.3,
+    0.83,
+    0.9,
+    1.42,
+    1.25,
+    0.95,
+    1.48,
+    1.32,
+    1.1,
+    1.28,
+    0.86
+  ],
+  "bass_density_per_phrase": [
+    0.0,
+    0.0,
+    0.0,
+    0.9,
+    0.89,
+    1.12,
+    1.21,
+    1.26,
+    1.17,
+    0.12,
+    0.01,
+    0.97,
+    1.04,
+    1.07,
+    0.88,
+    0.94,
+    1.14
+  ],
+  "energy_score": 2.7,
+  "segments": [
+    {
+      "beat_start": 0,
+      "beat_end": 17,
+      "label_id": 0,
+      "energy": 0.07297970354557037,
+      "label": "intro"
+    },
+    {
+      "beat_start": 18,
+      "beat_end": 39,
+      "label_id": 4,
+      "energy": 0.15854127705097198,
+      "label": "buildup"
+    },
+    {
+      "beat_start": 40,
+      "beat_end": 63,
+      "label_id": 2,
+      "energy": 0.16085092723369598,
+      "label": "buildup"
+    },
+    {
+      "beat_start": 64,
+      "beat_end": 152,
+      "label_id": 4,
+      "energy": 0.27825435996055603,
+      "label": "buildup"
+    },
+    {
+      "beat_start": 153,
+      "beat_end": 176,
+      "label_id": 2,
+      "energy": 0.18159310519695282,
+      "label": "buildup"
+    },
+    {
+      "beat_start": 177,
+      "beat_end": 201,
+      "label_id": 4,
+      "energy": 0.2196505218744278,
+      "label": "buildup"
+    },
+    {
+      "beat_start": 202,
+      "beat_end": 224,
+      "label_id": 2,
+      "energy": 0.2291429042816162,
+      "label": "buildup"
+    },
+    {
+      "beat_start": 225,
+      "beat_end": 282,
+      "label_id": 1,
+      "energy": 0.29493796825408936,
+      "label": "outro"
+    }
+  ],
+  "drop_beat": 225,
+  "vocal_transcript": [
+    {
+      "word": "you",
+      "beat": 16,
+      "duration_beats": 1
+    },
+    {
+      "word": "were",
+      "beat": 17,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "the",
+      "beat": 17,
+      "duration_beats": 1
+    },
+    {
+      "word": "shadow",
+      "beat": 18,
+      "duration_beats": 1
+    },
+    {
+      "word": "to",
+      "beat": 19,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "my",
+      "beat": 19,
+      "duration_beats": 1
+    },
+    {
+      "word": "light",
+      "beat": 20,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "did",
+      "beat": 20,
+      "duration_beats": 1
+    },
+    {
+      "word": "you",
+      "beat": 21,
+      "duration_beats": 1
+    },
+    {
+      "word": "feel",
+      "beat": 22,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "us?",
+      "beat": 22,
+      "duration_beats": 1
+    },
+    {
+      "word": "another",
+      "beat": 26,
+      "duration_beats": 1
+    },
+    {
+      "word": "star",
+      "beat": 27,
+      "duration_beats": 2
+    },
+    {
+      "word": "you",
+      "beat": 29,
+      "duration_beats": 1
+    },
+    {
+      "word": "fade",
+      "beat": 30,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "away",
+      "beat": 30,
+      "duration_beats": 1
+    },
+    {
+      "word": "i",
+      "beat": 31,
+      "duration_beats": 2
+    },
+    {
+      "word": "prayed",
+      "beat": 33,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "our",
+      "beat": 33,
+      "duration_beats": 1
+    },
+    {
+      "word": "aim",
+      "beat": 34,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "is",
+      "beat": 34,
+      "duration_beats": 1
+    },
+    {
+      "word": "out",
+      "beat": 35,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "of",
+      "beat": 35,
+      "duration_beats": 1
+    },
+    {
+      "word": "sight",
+      "beat": 36,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "i",
+      "beat": 36,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "want",
+      "beat": 36,
+      "duration_beats": 1
+    },
+    {
+      "word": "to",
+      "beat": 37,
+      "duration_beats": 1
+    },
+    {
+      "word": "see",
+      "beat": 38,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "you",
+      "beat": 38,
+      "duration_beats": 1
+    },
+    {
+      "word": "alive",
+      "beat": 39,
+      "duration_beats": 4
+    },
+    {
+      "word": "where",
+      "beat": 43,
+      "duration_beats": 4
+    },
+    {
+      "word": "are",
+      "beat": 47,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "you",
+      "beat": 47,
+      "duration_beats": 1
+    },
+    {
+      "word": "now?",
+      "beat": 48,
+      "duration_beats": 1
+    },
+    {
+      "word": "where",
+      "beat": 54,
+      "duration_beats": 1
+    },
+    {
+      "word": "are",
+      "beat": 55,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "you",
+      "beat": 55,
+      "duration_beats": 1
+    },
+    {
+      "word": "now?",
+      "beat": 56,
+      "duration_beats": 1
+    },
+    {
+      "word": "was",
+      "beat": 66,
+      "duration_beats": 1
+    },
+    {
+      "word": "it",
+      "beat": 67,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "all",
+      "beat": 67,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "in",
+      "beat": 67,
+      "duration_beats": 1
+    },
+    {
+      "word": "my",
+      "beat": 68,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "fantasy?",
+      "beat": 68,
+      "duration_beats": 1
+    },
+    {
+      "word": "where",
+      "beat": 70,
+      "duration_beats": 1
+    },
+    {
+      "word": "are",
+      "beat": 71,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "you",
+      "beat": 71,
+      "duration_beats": 1
+    },
+    {
+      "word": "now?",
+      "beat": 72,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "were",
+      "beat": 74,
+      "duration_beats": 1
+    },
+    {
+      "word": "you",
+      "beat": 75,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "only",
+      "beat": 75,
+      "duration_beats": 1
+    },
+    {
+      "word": "imaginary?",
+      "beat": 76,
+      "duration_beats": 1
+    },
+    {
+      "word": "where",
+      "beat": 79,
+      "duration_beats": 2
+    },
+    {
+      "word": "are",
+      "beat": 81,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "you",
+      "beat": 81,
+      "duration_beats": 1
+    },
+    {
+      "word": "now?",
+      "beat": 82,
+      "duration_beats": 1
+    },
+    {
+      "word": "that",
+      "beat": 85,
+      "duration_beats": 1
+    },
+    {
+      "word": "planet",
+      "beat": 86,
+      "duration_beats": 1
+    },
+    {
+      "word": "is",
+      "beat": 87,
+      "duration_beats": 1
+    },
+    {
+      "word": "under",
+      "beat": 88,
+      "duration_beats": 1
+    },
+    {
+      "word": "the",
+      "beat": 89,
+      "duration_beats": 1
+    },
+    {
+      "word": "sea",
+      "beat": 90,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "under",
+      "beat": 90,
+      "duration_beats": 3
+    },
+    {
+      "word": "the",
+      "beat": 93,
+      "duration_beats": 1
+    },
+    {
+      "word": "sea",
+      "beat": 94,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "where",
+      "beat": 95,
+      "duration_beats": 2
+    },
+    {
+      "word": "are",
+      "beat": 97,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "you",
+      "beat": 97,
+      "duration_beats": 1
+    },
+    {
+      "word": "now?",
+      "beat": 98,
+      "duration_beats": 1
+    },
+    {
+      "word": "another",
+      "beat": 100,
+      "duration_beats": 1
+    },
+    {
+      "word": "dream",
+      "beat": 101,
+      "duration_beats": 2
+    },
+    {
+      "word": "the",
+      "beat": 103,
+      "duration_beats": 3
+    },
+    {
+      "word": "monsters",
+      "beat": 106,
+      "duration_beats": 1
+    },
+    {
+      "word": "run",
+      "beat": 107,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "in",
+      "beat": 107,
+      "duration_beats": 1
+    },
+    {
+      "word": "one",
+      "beat": 108,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "side",
+      "beat": 108,
+      "duration_beats": 1
+    },
+    {
+      "word": "of",
+      "beat": 109,
+      "duration_beats": 1
+    },
+    {
+      "word": "me",
+      "beat": 110,
+      "duration_beats": 1
+    },
+    {
+      "word": "i'm",
+      "beat": 111,
+      "duration_beats": 1
+    },
+    {
+      "word": "fading",
+      "beat": 112,
+      "duration_beats": 1
+    },
+    {
+      "word": "i'm",
+      "beat": 113,
+      "duration_beats": 6
+    },
+    {
+      "word": "fading",
+      "beat": 119,
+      "duration_beats": 1
+    },
+    {
+      "word": "so",
+      "beat": 125,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "lost",
+      "beat": 125,
+      "duration_beats": 1
+    },
+    {
+      "word": "i'm",
+      "beat": 126,
+      "duration_beats": 1
+    },
+    {
+      "word": "fading",
+      "beat": 127,
+      "duration_beats": 2
+    },
+    {
+      "word": "i'm",
+      "beat": 129,
+      "duration_beats": 6
+    },
+    {
+      "word": "fading",
+      "beat": 135,
+      "duration_beats": 1
+    },
+    {
+      "word": "so",
+      "beat": 140,
+      "duration_beats": 1
+    },
+    {
+      "word": "lost",
+      "beat": 141,
+      "duration_beats": 1
+    },
+    {
+      "word": "i'm",
+      "beat": 142,
+      "duration_beats": 1
+    },
+    {
+      "word": "fading",
+      "beat": 143,
+      "duration_beats": 2
+    },
+    {
+      "word": "i'm",
+      "beat": 145,
+      "duration_beats": 2
+    },
+    {
+      "word": "fading",
+      "beat": 147,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "i'm",
+      "beat": 147,
+      "duration_beats": 1
+    },
+    {
+      "word": "fading",
+      "beat": 148,
+      "duration_beats": 1
+    },
+    {
+      "word": "i'm",
+      "beat": 149,
+      "duration_beats": 1
+    },
+    {
+      "word": "fading",
+      "beat": 150,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "i'm",
+      "beat": 150,
+      "duration_beats": 6
+    },
+    {
+      "word": "fading",
+      "beat": 156,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "i'm",
+      "beat": 156,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "letting",
+      "beat": 156,
+      "duration_beats": 1
+    },
+    {
+      "word": "go",
+      "beat": 157,
+      "duration_beats": 1
+    },
+    {
+      "word": "a",
+      "beat": 158,
+      "duration_beats": 1
+    },
+    {
+      "word": "deeper",
+      "beat": 159,
+      "duration_beats": 1
+    },
+    {
+      "word": "dive",
+      "beat": 160,
+      "duration_beats": 1
+    },
+    {
+      "word": "it",
+      "beat": 161,
+      "duration_beats": 1
+    },
+    {
+      "word": "turned",
+      "beat": 162,
+      "duration_beats": 1
+    },
+    {
+      "word": "a",
+      "beat": 163,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "silence",
+      "beat": 163,
+      "duration_beats": 1
+    },
+    {
+      "word": "of",
+      "beat": 164,
+      "duration_beats": 1
+    },
+    {
+      "word": "the",
+      "beat": 165,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "sea",
+      "beat": 165,
+      "duration_beats": 1
+    },
+    {
+      "word": "i'm",
+      "beat": 166,
+      "duration_beats": 1
+    },
+    {
+      "word": "breathing",
+      "beat": 167,
+      "duration_beats": 1
+    },
+    {
+      "word": "and",
+      "beat": 172,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "i'm",
+      "beat": 172,
+      "duration_beats": 4
+    },
+    {
+      "word": "fading",
+      "beat": 176,
+      "duration_beats": 1
+    },
+    {
+      "word": "i'm",
+      "beat": 177,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "fading",
+      "beat": 177,
+      "duration_beats": 2
+    },
+    {
+      "word": "i'm",
+      "beat": 179,
+      "duration_beats": 2
+    },
+    {
+      "word": "fading",
+      "beat": 181,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "i'm",
+      "beat": 181,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "fading",
+      "beat": 181,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "i'm",
+      "beat": 192,
+      "duration_beats": 1
+    },
+    {
+      "word": "fading",
+      "beat": 193,
+      "duration_beats": 1
+    },
+    {
+      "word": "i'm",
+      "beat": 194,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "fading",
+      "beat": 194,
+      "duration_beats": 1
+    },
+    {
+      "word": "i'm",
+      "beat": 195,
+      "duration_beats": 2
+    },
+    {
+      "word": "fading",
+      "beat": 197,
+      "duration_beats": 2
+    },
+    {
+      "word": "i'm",
+      "beat": 199,
+      "duration_beats": 2
+    },
+    {
+      "word": "fading",
+      "beat": 201,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "i'm",
+      "beat": 201,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "fading",
+      "beat": 201,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "i'm",
+      "beat": 201,
+      "duration_beats": 1
+    },
+    {
+      "word": "fading",
+      "beat": 202,
+      "duration_beats": 4
+    },
+    {
+      "word": "i'm",
+      "beat": 206,
+      "duration_beats": 4
+    },
+    {
+      "word": "fading",
+      "beat": 210,
+      "duration_beats": 1
+    },
+    {
+      "word": "i'm",
+      "beat": 211,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "fading",
+      "beat": 211,
+      "duration_beats": 1
+    },
+    {
+      "word": "i'm",
+      "beat": 212,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "fading",
+      "beat": 212,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "i'm",
+      "beat": 212,
+      "duration_beats": 2
+    },
+    {
+      "word": "fading",
+      "beat": 214,
+      "duration_beats": 2
+    },
+    {
+      "word": "where",
+      "beat": 216,
+      "duration_beats": 1
+    },
+    {
+      "word": "are",
+      "beat": 217,
+      "duration_beats": 1
+    },
+    {
+      "word": "you",
+      "beat": 218,
+      "duration_beats": 2
+    },
+    {
+      "word": "now?",
+      "beat": 220,
+      "duration_beats": 8
+    },
+    {
+      "word": "that",
+      "beat": 231,
+      "duration_beats": 1
+    },
+    {
+      "word": "planet",
+      "beat": 232,
+      "duration_beats": 1
+    },
+    {
+      "word": "is",
+      "beat": 233,
+      "duration_beats": 1
+    },
+    {
+      "word": "under",
+      "beat": 234,
+      "duration_beats": 1
+    },
+    {
+      "word": "the",
+      "beat": 235,
+      "duration_beats": 1
+    },
+    {
+      "word": "sea",
+      "beat": 236,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "under",
+      "beat": 236,
+      "duration_beats": 3
+    },
+    {
+      "word": "the",
+      "beat": 239,
+      "duration_beats": 1
+    },
+    {
+      "word": "sea",
+      "beat": 240,
+      "duration_beats": 1
+    },
+    {
+      "word": "where",
+      "beat": 241,
+      "duration_beats": 2
+    },
+    {
+      "word": "are",
+      "beat": 243,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "you",
+      "beat": 243,
+      "duration_beats": 1
+    },
+    {
+      "word": "now?",
+      "beat": 244,
+      "duration_beats": 1
+    },
+    {
+      "word": "another",
+      "beat": 246,
+      "duration_beats": 1
+    },
+    {
+      "word": "dream",
+      "beat": 247,
+      "duration_beats": 3
+    },
+    {
+      "word": "the",
+      "beat": 250,
+      "duration_beats": 2
+    },
+    {
+      "word": "monsters",
+      "beat": 252,
+      "duration_beats": 1
+    },
+    {
+      "word": "run",
+      "beat": 253,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "in",
+      "beat": 253,
+      "duration_beats": 1
+    },
+    {
+      "word": "one",
+      "beat": 254,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "side",
+      "beat": 254,
+      "duration_beats": 1
+    },
+    {
+      "word": "of",
+      "beat": 255,
+      "duration_beats": 1
+    },
+    {
+      "word": "me",
+      "beat": 256,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "i'm",
+      "beat": 258,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "fading",
+      "beat": 258,
+      "duration_beats": 2
+    },
+    {
+      "word": "i'm",
+      "beat": 260,
+      "duration_beats": 6
+    },
+    {
+      "word": "fading",
+      "beat": 266,
+      "duration_beats": 2
+    },
+    {
+      "word": "so",
+      "beat": 268,
+      "duration_beats": 4
+    },
+    {
+      "word": "lost",
+      "beat": 272,
+      "duration_beats": 1
+    },
+    {
+      "word": "i'm",
+      "beat": 273,
+      "duration_beats": 1
+    },
+    {
+      "word": "fading",
+      "beat": 274,
+      "duration_beats": 2
+    },
+    {
+      "word": "i'm",
+      "beat": 281,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "fading",
+      "beat": 281,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "so",
+      "beat": 281,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "lost",
+      "beat": 281,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "i'm",
+      "beat": 281,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "fading",
+      "beat": 281,
+      "duration_beats": 0.5
+    }
+  ],
+  "best_loop_words": [
+    "you",
+    "were",
+    "the",
+    "shadow",
+    "light",
+    "did",
+    "you",
+    "feel",
+    "us?",
+    "another",
+    "star",
+    "you",
+    "fade",
+    "away",
+    "prayed",
+    "our",
+    "aim",
+    "out",
+    "sight",
+    "want",
+    "see",
+    "you",
+    "alive",
+    "where",
+    "are",
+    "you",
+    "now?",
+    "where",
+    "are",
+    "you",
+    "now?",
+    "was",
+    "all",
+    "fantasy?",
+    "where",
+    "are",
+    "you",
+    "now?",
+    "were",
+    "you",
+    "only",
+    "imaginary?",
+    "where",
+    "are",
+    "you",
+    "now?",
+    "that",
+    "planet",
+    "under",
+    "the",
+    "sea",
+    "under",
+    "the",
+    "sea",
+    "where",
+    "are",
+    "you",
+    "now?",
+    "another",
+    "dream",
+    "the",
+    "monsters",
+    "run",
+    "one",
+    "side",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "lost",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "lost",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "letting",
+    "deeper",
+    "dive",
+    "turned",
+    "silence",
+    "the",
+    "sea",
+    "i'm",
+    "breathing",
+    "and",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "where",
+    "are",
+    "you",
+    "now?",
+    "that",
+    "planet",
+    "under",
+    "the",
+    "sea",
+    "under",
+    "the",
+    "sea",
+    "where",
+    "are",
+    "you",
+    "now?",
+    "another",
+    "dream",
+    "the",
+    "monsters",
+    "run",
+    "one",
+    "side",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "lost",
+    "i'm",
+    "fading",
+    "i'm",
+    "fading",
+    "lost",
+    "i'm",
+    "fading"
+  ],
+  "mixable_zones": {
+    "mix_in": [
+      {
+        "beat_start": 0,
+        "beat_end": 17,
+        "reason": "intro"
+      }
+    ],
+    "mix_out": [
+      {
+        "beat_start": 225,
+        "beat_end": 282,
+        "reason": "outro"
+      }
+    ]
+  }
+}
+
+### Track B (Incoming)
+{
+  "title": "Alan Walker - Spectre",
+  "bpm": 129.19921875,
+  "duration_beats": 394,
+  "phrase_boundaries": [
+    0,
+    16,
+    32,
+    48,
+    64,
+    80,
+    96,
+    112,
+    128,
+    144,
+    160,
+    176,
+    192,
+    208,
+    224,
+    240,
+    256,
+    272,
+    288,
+    304,
+    320,
+    336,
+    352,
+    368,
+    384
+  ],
+  "key": "E major",
+  "camelot": "12B",
+  "energy_curve_per_phrase": [
+    1.52,
+    1.39,
+    1.62,
+    1.64,
+    2.66,
+    2.73,
+    2.35,
+    2.77,
+    3.6,
+    3.46,
+    2.91,
+    2.57,
+    2.91,
+    3.01,
+    3.05,
+    2.73,
+    2.46,
+    2.34,
+    2.52,
+    2.93,
+    3.75,
+    3.65,
+    3.64,
+    2.23
+  ],
+  "vocal_density_per_phrase": [
+    0.81,
+    0.83,
+    0.97,
+    0.94,
+    1.09,
+    1.18,
+    0.73,
+    0.02,
+    0.02,
+    0.0,
+    0.76,
+    0.88,
+    0.98,
+    0.92,
+    1.23,
+    1.37,
+    0.74,
+    0.48,
+    0.32,
+    0.0,
+    0.0,
+    0.07,
+    0.61,
+    0.46
+  ],
+  "bass_density_per_phrase": [
+    0.01,
+    0.0,
+    0.01,
+    0.0,
+    1.73,
+    1.84,
+    0.69,
+    1.36,
+    1.66,
+    1.72,
+    2.16,
+    1.8,
+    1.98,
+    2.12,
+    1.29,
+    0.88,
+    0.82,
+    0.69,
+    0.78,
+    1.19,
+    1.81,
+    1.69,
+    1.67,
+    0.99
+  ],
+  "energy_score": 3.3,
+  "segments": [
+    {
+      "beat_start": 0,
+      "beat_end": 62,
+      "label_id": 0,
+      "energy": 0.15409784018993378,
+      "label": "intro"
+    },
+    {
+      "beat_start": 63,
+      "beat_end": 95,
+      "label_id": 2,
+      "energy": 0.2650982439517975,
+      "label": "buildup"
+    },
+    {
+      "beat_start": 96,
+      "beat_end": 117,
+      "label_id": 3,
+      "energy": 0.24511559307575226,
+      "label": "buildup"
+    },
+    {
+      "beat_start": 118,
+      "beat_end": 161,
+      "label_id": 1,
+      "energy": 0.33327069878578186,
+      "label": "buildup"
+    },
+    {
+      "beat_start": 162,
+      "beat_end": 222,
+      "label_id": 2,
+      "energy": 0.2841447591781616,
+      "label": "buildup"
+    },
+    {
+      "beat_start": 223,
+      "beat_end": 255,
+      "label_id": 1,
+      "energy": 0.29875344038009644,
+      "label": "buildup"
+    },
+    {
+      "beat_start": 256,
+      "beat_end": 309,
+      "label_id": 3,
+      "energy": 0.24329504370689392,
+      "label": "buildup"
+    },
+    {
+      "beat_start": 310,
+      "beat_end": 381,
+      "label_id": 1,
+      "energy": 0.3462178111076355,
+      "label": "drop"
+    },
+    {
+      "beat_start": 382,
+      "beat_end": 394,
+      "label_id": 4,
+      "energy": 0.0016543399542570114,
+      "label": "outro"
+    }
+  ],
+  "drop_beat": 310,
+  "vocal_transcript": [
+    {
+      "word": "hello,",
+      "beat": 0,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "hello,",
+      "beat": 3,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "can",
+      "beat": 4,
+      "duration_beats": 1
+    },
+    {
+      "word": "you",
+      "beat": 5,
+      "duration_beats": 1
+    },
+    {
+      "word": "hear",
+      "beat": 6,
+      "duration_beats": 2
+    },
+    {
+      "word": "me?",
+      "beat": 8,
+      "duration_beats": 2
+    },
+    {
+      "word": "as",
+      "beat": 11,
+      "duration_beats": 1
+    },
+    {
+      "word": "i",
+      "beat": 12,
+      "duration_beats": 1
+    },
+    {
+      "word": "scream",
+      "beat": 13,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "your",
+      "beat": 13,
+      "duration_beats": 1
+    },
+    {
+      "word": "name.",
+      "beat": 14,
+      "duration_beats": 2
+    },
+    {
+      "word": "hello,",
+      "beat": 17,
+      "duration_beats": 1
+    },
+    {
+      "word": "hello,",
+      "beat": 18,
+      "duration_beats": 1
+    },
+    {
+      "word": "do",
+      "beat": 21,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "you",
+      "beat": 21,
+      "duration_beats": 1
+    },
+    {
+      "word": "need",
+      "beat": 22,
+      "duration_beats": 2
+    },
+    {
+      "word": "me?",
+      "beat": 24,
+      "duration_beats": 2
+    },
+    {
+      "word": "before",
+      "beat": 27,
+      "duration_beats": 1
+    },
+    {
+      "word": "i",
+      "beat": 28,
+      "duration_beats": 1
+    },
+    {
+      "word": "fade",
+      "beat": 29,
+      "duration_beats": 1
+    },
+    {
+      "word": "away,",
+      "beat": 30,
+      "duration_beats": 2
+    },
+    {
+      "word": "it's",
+      "beat": 33,
+      "duration_beats": 1
+    },
+    {
+      "word": "just",
+      "beat": 34,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "a",
+      "beat": 34,
+      "duration_beats": 1
+    },
+    {
+      "word": "place",
+      "beat": 35,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "that",
+      "beat": 35,
+      "duration_beats": 1
+    },
+    {
+      "word": "i",
+      "beat": 36,
+      "duration_beats": 1
+    },
+    {
+      "word": "call",
+      "beat": 37,
+      "duration_beats": 2
+    },
+    {
+      "word": "home",
+      "beat": 39,
+      "duration_beats": 2
+    },
+    {
+      "word": "to",
+      "beat": 44,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "find",
+      "beat": 44,
+      "duration_beats": 1
+    },
+    {
+      "word": "what",
+      "beat": 45,
+      "duration_beats": 1
+    },
+    {
+      "word": "i've",
+      "beat": 46,
+      "duration_beats": 1
+    },
+    {
+      "word": "become",
+      "beat": 47,
+      "duration_beats": 1
+    },
+    {
+      "word": "walk",
+      "beat": 51,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "along",
+      "beat": 51,
+      "duration_beats": 1
+    },
+    {
+      "word": "the",
+      "beat": 52,
+      "duration_beats": 1
+    },
+    {
+      "word": "path",
+      "beat": 53,
+      "duration_beats": 1
+    },
+    {
+      "word": "unknown",
+      "beat": 54,
+      "duration_beats": 3
+    },
+    {
+      "word": "we",
+      "beat": 60,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "live,",
+      "beat": 60,
+      "duration_beats": 1
+    },
+    {
+      "word": "we",
+      "beat": 62,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "love,",
+      "beat": 62,
+      "duration_beats": 1
+    },
+    {
+      "word": "we",
+      "beat": 64,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "lie",
+      "beat": 64,
+      "duration_beats": 1
+    },
+    {
+      "word": "deep",
+      "beat": 67,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "in",
+      "beat": 67,
+      "duration_beats": 1
+    },
+    {
+      "word": "the",
+      "beat": 68,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "dark,",
+      "beat": 68,
+      "duration_beats": 1
+    },
+    {
+      "word": "i",
+      "beat": 70,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "don't",
+      "beat": 70,
+      "duration_beats": 1
+    },
+    {
+      "word": "need",
+      "beat": 71,
+      "duration_beats": 1
+    },
+    {
+      "word": "the",
+      "beat": 72,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "light",
+      "beat": 72,
+      "duration_beats": 2
+    },
+    {
+      "word": "there's",
+      "beat": 75,
+      "duration_beats": 1
+    },
+    {
+      "word": "a",
+      "beat": 76,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "ghost",
+      "beat": 76,
+      "duration_beats": 1
+    },
+    {
+      "word": "inside",
+      "beat": 77,
+      "duration_beats": 2
+    },
+    {
+      "word": "me",
+      "beat": 79,
+      "duration_beats": 1
+    },
+    {
+      "word": "it'll",
+      "beat": 83,
+      "duration_beats": 1
+    },
+    {
+      "word": "be",
+      "beat": 84,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "lost",
+      "beat": 84,
+      "duration_beats": 1
+    },
+    {
+      "word": "to",
+      "beat": 85,
+      "duration_beats": 1
+    },
+    {
+      "word": "the",
+      "beat": 86,
+      "duration_beats": 1
+    },
+    {
+      "word": "other",
+      "beat": 87,
+      "duration_beats": 1
+    },
+    {
+      "word": "side",
+      "beat": 88,
+      "duration_beats": 1
+    },
+    {
+      "word": "we",
+      "beat": 92,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "live,",
+      "beat": 92,
+      "duration_beats": 1
+    },
+    {
+      "word": "we",
+      "beat": 94,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "love,",
+      "beat": 94,
+      "duration_beats": 1
+    },
+    {
+      "word": "we",
+      "beat": 96,
+      "duration_beats": 1
+    },
+    {
+      "word": "lie",
+      "beat": 97,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "hello,",
+      "beat": 155,
+      "duration_beats": 8
+    },
+    {
+      "word": "hello,",
+      "beat": 164,
+      "duration_beats": 1
+    },
+    {
+      "word": "nice",
+      "beat": 166,
+      "duration_beats": 1
+    },
+    {
+      "word": "to",
+      "beat": 167,
+      "duration_beats": 1
+    },
+    {
+      "word": "meet",
+      "beat": 168,
+      "duration_beats": 1
+    },
+    {
+      "word": "you",
+      "beat": 169,
+      "duration_beats": 1
+    },
+    {
+      "word": "voice",
+      "beat": 171,
+      "duration_beats": 2
+    },
+    {
+      "word": "inside",
+      "beat": 173,
+      "duration_beats": 2
+    },
+    {
+      "word": "of",
+      "beat": 175,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "my",
+      "beat": 175,
+      "duration_beats": 1
+    },
+    {
+      "word": "head",
+      "beat": 176,
+      "duration_beats": 1
+    },
+    {
+      "word": "hello,",
+      "beat": 178,
+      "duration_beats": 1
+    },
+    {
+      "word": "hello,",
+      "beat": 180,
+      "duration_beats": 1
+    },
+    {
+      "word": "i",
+      "beat": 182,
+      "duration_beats": 1
+    },
+    {
+      "word": "believe",
+      "beat": 183,
+      "duration_beats": 2
+    },
+    {
+      "word": "you",
+      "beat": 185,
+      "duration_beats": 2
+    },
+    {
+      "word": "how",
+      "beat": 189,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "can",
+      "beat": 189,
+      "duration_beats": 1
+    },
+    {
+      "word": "i",
+      "beat": 190,
+      "duration_beats": 2
+    },
+    {
+      "word": "forget?",
+      "beat": 192,
+      "duration_beats": 1
+    },
+    {
+      "word": "is",
+      "beat": 194,
+      "duration_beats": 1
+    },
+    {
+      "word": "this",
+      "beat": 195,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "a",
+      "beat": 195,
+      "duration_beats": 1
+    },
+    {
+      "word": "place",
+      "beat": 196,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "that",
+      "beat": 196,
+      "duration_beats": 1
+    },
+    {
+      "word": "i",
+      "beat": 197,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "call",
+      "beat": 197,
+      "duration_beats": 2
+    },
+    {
+      "word": "home",
+      "beat": 199,
+      "duration_beats": 2
+    },
+    {
+      "word": "to",
+      "beat": 204,
+      "duration_beats": 1
+    },
+    {
+      "word": "find",
+      "beat": 205,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "what",
+      "beat": 205,
+      "duration_beats": 1
+    },
+    {
+      "word": "i've",
+      "beat": 206,
+      "duration_beats": 2
+    },
+    {
+      "word": "become",
+      "beat": 208,
+      "duration_beats": 1
+    },
+    {
+      "word": "walk",
+      "beat": 211,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "along",
+      "beat": 211,
+      "duration_beats": 1
+    },
+    {
+      "word": "the",
+      "beat": 212,
+      "duration_beats": 1
+    },
+    {
+      "word": "path",
+      "beat": 213,
+      "duration_beats": 1
+    },
+    {
+      "word": "unknown",
+      "beat": 214,
+      "duration_beats": 2
+    },
+    {
+      "word": "we",
+      "beat": 220,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "live,",
+      "beat": 220,
+      "duration_beats": 1
+    },
+    {
+      "word": "we",
+      "beat": 222,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "love,",
+      "beat": 222,
+      "duration_beats": 1
+    },
+    {
+      "word": "we",
+      "beat": 224,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "lie",
+      "beat": 224,
+      "duration_beats": 1
+    },
+    {
+      "word": "deep",
+      "beat": 227,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "in",
+      "beat": 227,
+      "duration_beats": 1
+    },
+    {
+      "word": "the",
+      "beat": 228,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "dark,",
+      "beat": 228,
+      "duration_beats": 1
+    },
+    {
+      "word": "i",
+      "beat": 230,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "don't",
+      "beat": 230,
+      "duration_beats": 1
+    },
+    {
+      "word": "need",
+      "beat": 231,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "the",
+      "beat": 231,
+      "duration_beats": 1
+    },
+    {
+      "word": "light",
+      "beat": 232,
+      "duration_beats": 2
+    },
+    {
+      "word": "there's",
+      "beat": 235,
+      "duration_beats": 1
+    },
+    {
+      "word": "a",
+      "beat": 236,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "ghost",
+      "beat": 236,
+      "duration_beats": 1
+    },
+    {
+      "word": "inside",
+      "beat": 237,
+      "duration_beats": 2
+    },
+    {
+      "word": "me",
+      "beat": 239,
+      "duration_beats": 1
+    },
+    {
+      "word": "it'll",
+      "beat": 243,
+      "duration_beats": 1
+    },
+    {
+      "word": "be",
+      "beat": 244,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "lost",
+      "beat": 244,
+      "duration_beats": 1
+    },
+    {
+      "word": "to",
+      "beat": 245,
+      "duration_beats": 1
+    },
+    {
+      "word": "the",
+      "beat": 246,
+      "duration_beats": 1
+    },
+    {
+      "word": "other",
+      "beat": 247,
+      "duration_beats": 1
+    },
+    {
+      "word": "side",
+      "beat": 248,
+      "duration_beats": 1
+    },
+    {
+      "word": "we",
+      "beat": 252,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "live,",
+      "beat": 252,
+      "duration_beats": 1
+    },
+    {
+      "word": "we",
+      "beat": 254,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "love,",
+      "beat": 254,
+      "duration_beats": 1
+    },
+    {
+      "word": "we",
+      "beat": 256,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "lie",
+      "beat": 256,
+      "duration_beats": 2
+    },
+    {
+      "word": "we",
+      "beat": 284,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "live,",
+      "beat": 284,
+      "duration_beats": 1
+    },
+    {
+      "word": "we",
+      "beat": 286,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "love,",
+      "beat": 286,
+      "duration_beats": 1
+    },
+    {
+      "word": "we",
+      "beat": 288,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "lie",
+      "beat": 288,
+      "duration_beats": 1
+    },
+    {
+      "word": "you",
+      "beat": 393,
+      "duration_beats": 0.5
+    },
+    {
+      "word": "you",
+      "beat": 393,
+      "duration_beats": 0.5
+    }
+  ],
+  "best_loop_words": [
+    "hello,",
+    "hello,",
+    "can",
+    "you",
+    "hear",
+    "me?",
+    "scream",
+    "your",
+    "name.",
+    "hello,",
+    "hello,",
+    "you",
+    "need",
+    "me?",
+    "before",
+    "fade",
+    "away,",
+    "it's",
+    "just",
+    "place",
+    "that",
+    "call",
+    "home",
+    "find",
+    "what",
+    "i've",
+    "become",
+    "walk",
+    "along",
+    "the",
+    "path",
+    "unknown",
+    "live,",
+    "love,",
+    "lie",
+    "deep",
+    "the",
+    "dark,",
+    "don't",
+    "need",
+    "the",
+    "light",
+    "there's",
+    "ghost",
+    "inside",
+    "it'll",
+    "lost",
+    "the",
+    "other",
+    "side",
+    "live,",
+    "love,",
+    "lie",
+    "hello,",
+    "hello,",
+    "nice",
+    "meet",
+    "you",
+    "voice",
+    "inside",
+    "head",
+    "hello,",
+    "hello,",
+    "believe",
+    "you",
+    "how",
+    "can",
+    "forget?",
+    "this",
+    "place",
+    "that",
+    "call",
+    "home",
+    "find",
+    "what",
+    "i've",
+    "become",
+    "walk",
+    "along",
+    "the",
+    "path",
+    "unknown",
+    "live,",
+    "love,",
+    "lie",
+    "deep",
+    "the",
+    "dark,",
+    "don't",
+    "need",
+    "the",
+    "light",
+    "there's",
+    "ghost",
+    "inside",
+    "it'll",
+    "lost",
+    "the",
+    "other",
+    "side",
+    "live,",
+    "love,",
+    "lie",
+    "live,",
+    "love,",
+    "lie",
+    "you",
+    "you"
+  ],
+  "mixable_zones": {
+    "mix_in": [
+      {
+        "beat_start": 0,
+        "beat_end": 62,
+        "reason": "intro"
+      }
+    ],
+    "mix_out": [
+      {
+        "beat_start": 382,
+        "beat_end": 394,
+        "reason": "outro"
+      }
+    ]
+  }
+}
+
+
+## Actions Vocabulary (Effects)
+You can apply the following effects to any track or stem during the transition.
+Note: You must output ONLY valid JSON.
+
+- `volume_fade`: Linearly fades volume up or down.
+- `hpf_sweep_up`: Sweeps a high-pass filter from 20Hz to 2000Hz (washes out the low end).
+- `hpf_sweep_down`: Sweeps a high-pass filter from 2000Hz down to 20Hz (brings back the low end).
+- `lpf_sweep_down`: Sweeps a low-pass filter from 20000Hz to 200Hz (muffles the sound).
+- `lpf_sweep_up`: Sweeps a low-pass filter from 200Hz to 20000Hz (un-muffles the sound).
+- `echo_out`: Applies a 3/4 beat delay and fades the original signal to 0. Great for ending a vocal phrase.
+- `reverb_throw`: Applies a massive reverb tail and fades the original signal to 0. Great for drops.
+
+
+## Rules
+1. **Phrase Alignment**: All `beat_start` and `beat_end` values MUST align with the 16-beat phrase boundaries provided in the Song Cards.
+2. **Stem-Level Control**: You can apply actions to specific stems: `drums`, `bass`, `vocals`, `other`. Or you can use `master` to apply to the whole mix.
+3. **Mute by Default**: Track B will start playing at 100% volume at beat 0 UNLESS you explicitly apply a `fade_in` or `hpf_sweep_down` effect to its stems. Always use `fade_in` for Track B stems that shouldn't play immediately!
+4. **No Clashing Frequencies**: If both songs have heavy bass or drums, you must apply a filter (`hpf_sweep_up` or `volume_fade`) to one of them to prevent mud.
+5. **Vocals First**: If Song A has a vocal tail, use `echo_out` on the vocals before Song B's vocal begins.
+6. **JSON Only**: You must respond ONLY with a raw JSON block. No markdown formatting, no explanations, no ` ```json ` blocks. Just the raw JSON object.
+
+## JSON Output Schema
+{
+  "track_a_start_beat": int (e.g. 128),
+  "track_a_end_beat": int (e.g. 192, where the track A stops playing),
+  "track_b_start_beat": int (e.g. 0),
+  "track_b_end_beat": int (e.g. 64, this is how much of track B to render for the transition),
+  "actions": [
+    {
+      "track": "A" or "B",
+      "stem": "drums", "bass", "vocals", "other", or "master",
+      "beat_start": int (relative to the transition start, e.g. 0),
+      "beat_end": int,
+      "effect": "hpf_sweep_up" (from vocabulary)
+    }
+  ]
+}
+

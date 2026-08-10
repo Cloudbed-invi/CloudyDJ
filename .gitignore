@@ -1,3 +1,4 @@
 library/
 ffmpeg.zip
 ffmpeg-master-latest-win64-gpl/
+__pycache__/
