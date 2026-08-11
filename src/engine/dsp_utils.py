@@ -23,6 +23,48 @@ def _to_mono(audio):
     return audio.astype(np.float32)
 
 
+# ---------------------------------------------------------------------------
+# Phase Alignment (Auto-Nudge)
+# ---------------------------------------------------------------------------
+
+def calculate_phase_nudge(a_drums, b_drums, sr, max_nudge_samples=None):
+    """
+    Finds the exact sample shift to align the kick transients of B with A.
+    Returns an integer offset (positive means shift B right, negative means shift B left).
+    """
+    if max_nudge_samples is None:
+        max_nudge_samples = int(0.1 * sr) # default max nudge of 100ms
+        
+    a_mono = _to_mono(a_drums)
+    b_mono = _to_mono(b_drums)
+    
+    # Extract absolute envelopes
+    a_env = np.abs(a_mono)
+    b_env = np.abs(b_mono)
+    
+    # Low-Pass Filter on the envelope to highlight macro kicks (~100Hz for sharp transient detection)
+    nyq = 0.5 * sr
+    b_coeff, a_coeff = signal.butter(2, 100 / nyq, btype='low')
+    
+    # filtfilt can fail on very short arrays
+    if len(a_env) < 33 or len(b_env) < 33:
+        return 0
+        
+    a_env = signal.filtfilt(b_coeff, a_coeff, a_env)
+    b_env = signal.filtfilt(b_coeff, a_coeff, b_env)
+    
+    # Cross-correlate
+    correlation = signal.correlate(a_env, b_env, mode='full')
+    lags = signal.correlation_lags(len(a_env), len(b_env), mode='full')
+    
+    # Find the peak within max_nudge bounds
+    valid_idx = np.where((lags >= -max_nudge_samples) & (lags <= max_nudge_samples))[0]
+    if len(valid_idx) == 0:
+        return 0
+        
+    best_lag = lags[valid_idx[np.argmax(correlation[valid_idx])]]
+    return int(best_lag)
+
 def _is_stereo(audio):
     return audio.ndim == 2 and audio.shape[1] == 2
 
@@ -145,16 +187,68 @@ def compute_gain_match(a_lufs, b_lufs):
     Return a linear gain scalar to apply to Track B so its loudness
     matches Track A.
 
-    Rules:
-      - NEVER boost above 1.0 (0 dB) — only duck or leave as-is
-      - Minimum scalar is 0.25 (−12 dB) to prevent extreme ducking
-      - If A is quieter than B, duck A instead — caller handles that
-
-    Returns: float in [0.25, 1.0]
+    Returns: float in [0.5, 1.5] (allowing B to be boosted/ducked by max ~3.5dB)
     """
     diff_db = a_lufs - b_lufs          # positive = B is quieter → needs boost
     gain = 10.0 ** (diff_db / 20.0)   # convert dB difference to linear
-    return float(np.clip(gain, 0.25, 1.0))
+    return float(np.clip(gain, 0.5, 1.5))
+
+# ---------------------------------------------------------------------------
+# Master Limiter
+# ---------------------------------------------------------------------------
+
+def apply_master_limiter(audio, target_dbfs=-0.5, ceiling_dbfs=-0.1):
+    """
+    A dynamic soft clipper / limiter. Catches huge peaks (like overlapping drops) 
+    without permanently turning down the rest of the song like static normalization does.
+    """
+    target = 10.0 ** (target_dbfs / 20.0)
+    ceiling = 10.0 ** (ceiling_dbfs / 20.0)
+    
+    abs_audio = np.abs(audio)
+    mask = abs_audio > target
+    
+    compressed = np.copy(audio)
+    if np.any(mask):
+        overshoot = abs_audio[mask] - target
+        compressed_overshoot = (ceiling - target) * np.tanh(overshoot / max(1e-9, (ceiling - target)))
+        compressed[mask] = np.sign(audio[mask]) * (target + compressed_overshoot)
+        
+    return compressed
+
+def clean_vocal_stem(vocal_audio, sr):
+    """
+    Applies EQ and a slight noise gate to an AI-separated vocal stem
+    to remove high-frequency 'hiss' and robotic artifacts.
+    """
+    if len(vocal_audio) == 0:
+        return vocal_audio
+        
+    # 1. Low-Pass Filter to remove the harsh 'hiss' above 10kHz
+    nyq = 0.5 * sr
+    b, a = signal.butter(4, 10000 / nyq, btype='low', analog=False)
+    filtered = signal.filtfilt(b, a, vocal_audio, axis=0)
+    
+    # 2. High-Pass Filter to remove any sub-bass rumble bleed
+    b, a = signal.butter(4, 100 / nyq, btype='high', analog=False)
+    filtered = signal.filtfilt(b, a, filtered, axis=0)
+    
+    # 3. Simple Noise Gate
+    rms = librosa.feature.rms(y=np.mean(filtered, axis=1) if filtered.ndim == 2 else filtered, frame_length=2048, hop_length=512)[0]
+    gate_threshold = 0.015  # -36 dB roughly
+    gate = (rms > gate_threshold).astype(np.float32)
+    gate = signal.savgol_filter(gate, 11, 3) # smooth the gate
+    gate = np.clip(gate, 0.0, 1.0)
+    
+    # Expand gate array to match audio length
+    gate_full = np.interp(np.arange(len(filtered)), np.arange(len(rms)) * 512, gate)
+    
+    if filtered.ndim == 2:
+        filtered = filtered * gate_full[:, np.newaxis]
+    else:
+        filtered = filtered * gate_full
+        
+    return filtered.astype(np.float32)
 
 
 # ---------------------------------------------------------------------------
@@ -324,13 +418,49 @@ def apply_hpf_sweep(audio, sr, start_freq=2000, end_freq=80, num_chunks=32):
         norm_cut  = freq / nyq
 
         if 0.0 < norm_cut < 1.0:
-            b, a = signal.butter(4, norm_cut, btype='high', analog=False)
+            # Use Chebyshev Type I for that DJ-mixer resonant peaking at the cutoff!
+            # 6dB of ripple creates a pronounced "whoosh" instead of a flat washout.
+            b, a = signal.cheby1(4, 6, norm_cut, btype='high', analog=False)
             out[start_idx:end_idx] = _apply_filter_to_audio(chunk, b, a)
         else:
             out[start_idx:end_idx] = chunk
 
     return out
 
+
+# ---------------------------------------------------------------------------
+# LPF sweep (intro effect)
+# ---------------------------------------------------------------------------
+
+def apply_lpf_sweep(audio, sr, start_freq=500, end_freq=20000, num_chunks=32):
+    """
+    Gradually sweep an LPF from start_freq up to end_freq.
+    Used to 'reveal' Track B (muffled to bright).
+    Handles mono and stereo.
+    """
+    if len(audio) == 0:
+        return audio.copy()
+
+    out        = np.zeros_like(audio)
+    chunk_size = max(1, len(audio) // num_chunks)
+    freqs      = np.logspace(np.log10(max(start_freq, 1)),
+                             np.log10(max(end_freq,   1)), num_chunks)
+    nyq = 0.5 * sr
+
+    for i in range(num_chunks):
+        start_idx = i * chunk_size
+        end_idx   = start_idx + chunk_size if i < num_chunks - 1 else len(audio)
+        chunk     = audio[start_idx:end_idx]
+        freq      = freqs[i]
+        norm_cut  = freq / nyq
+
+        if 0.0 < norm_cut < 1.0:
+            b, a = signal.butter(4, norm_cut, btype='low')
+            out[start_idx:end_idx] = _apply_filter_to_audio(chunk, b, a)
+        else:
+            out[start_idx:end_idx] = chunk
+
+    return out
 
 # ---------------------------------------------------------------------------
 # Loop source detection (Whisper + onset fallback)
@@ -388,27 +518,6 @@ def find_best_loop_source(track_data, drop_sample, bpm, sr):
     onset_sample = search_start + onsets[-1]
     return onset_sample, onset_sample + samples_per_beat
 
-
-def snap_to_nearest_downbeat(sample_idx, beat_times, sr=44100):
-    """
-    Given a sample index and a list of beat times (in seconds),
-    find the nearest 'downbeat' (1-beat of a 4-beat bar) and return its sample index.
-    Assumes beat_times[0] is a downbeat, and every 4th beat thereafter is a downbeat.
-    """
-    if len(beat_times) == 0:
-        return sample_idx
-        
-    # Get downbeat times (every 4th beat starting from 0)
-    downbeat_times = [beat_times[i] for i in range(0, len(beat_times), 4)]
-    
-    # Convert sample_idx to seconds
-    target_time = sample_idx / sr
-    
-    # Find the nearest downbeat time
-    nearest_downbeat_time = min(downbeat_times, key=lambda t: abs(t - target_time))
-    
-    # Return it as a sample index
-    return int(nearest_downbeat_time * sr)
 
 # ---------------------------------------------------------------------------
 # Instrumental intro finder
@@ -490,15 +599,15 @@ def find_vocal_cutoff_in_buildup(track_data, build_start, drop_sample, sr):
                 nearest = int(beats[np.argmin(np.abs(beats - w_end))])
                 snapped = int(np.clip(nearest, build_start, drop_sample - spb))
                 print(f"  Snapped to beat at {snapped}")
-                return snapped
-            return w_end
+                return snapped, True
+            return w_end, True
 
     except Exception as e:
         print(f"  Whisper vocal cutoff failed: {e}")
 
     fallback = max(build_start, drop_sample - 2 * spb)
     print(f"  Vocal cutoff fallback: 2 beats before drop at {fallback}")
-    return fallback
+    return fallback, False
 
 
 # ---------------------------------------------------------------------------
@@ -518,7 +627,7 @@ def find_vocal_entry(vocal_stem, start_sample, sr):
     search_audio = mono[start_sample:search_end]
 
     if len(search_audio) < int(0.5 * sr):
-        return start_sample
+        return start_sample, False
 
     try:
         whisper_sr = 16000
@@ -529,13 +638,19 @@ def find_vocal_entry(vocal_stem, start_sample, sr):
                                     language="en", word_timestamps=True)
         words = [w for seg in result.get("segments", [])
                    for w in seg.get("words", [])]
+                   
+        pre_roll = mono[max(0, start_sample - int(0.5 * sr)):start_sample]
+        already_active = len(pre_roll) > 0 and np.sqrt(np.mean(pre_roll**2)) > 0.02
 
         if words:
             first_word = words[0]
-            entry = start_sample + int(first_word["start"] * sr)
-            print(f"  B vocal entry: '{first_word['word'].strip()}' at "
-                  f"{first_word['start']:.2f}s after swap point")
-            return entry
+            if first_word["start"] < 0.15 and already_active:
+                pass # truncated word, not a real onset
+            else:
+                entry = start_sample + int(first_word["start"] * sr)
+                print(f"  B vocal entry: '{first_word['word'].strip()}' at "
+                      f"{first_word['start']:.2f}s after swap point")
+                return entry, True
 
     except Exception as e:
         print(f"  Whisper vocal entry failed: {e}")
@@ -548,10 +663,10 @@ def find_vocal_entry(vocal_stem, start_sample, sr):
         if r > 0.08:
             entry = start_sample + librosa.frames_to_samples(i, hop_length=512)
             print(f"  B vocal entry (RMS fallback) at sample {entry}")
-            return entry
+            return entry, False
 
     print(f"  B vocal entry: no vocals found, using start_sample")
-    return start_sample
+    return start_sample, False
 
 
 # ---------------------------------------------------------------------------
