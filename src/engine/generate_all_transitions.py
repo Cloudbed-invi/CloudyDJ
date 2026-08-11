@@ -118,7 +118,7 @@ def get_track_data(crate, track_name):
     stems     = data["stems"]
 
     vocals, sr = load_audio(stems["vocals"])
-    vocals = dsp_utils.clean_vocal_stem(vocals, sr)
+    # removed clean_vocal_stem
     drums,  _  = load_audio(stems["drums"])
     bass,   _  = load_audio(stems["bass"])
     other,  _  = load_audio(stems["other"])
@@ -313,362 +313,178 @@ def _write_len(out, start, stem, stem_start, stem_end):
 # T1 — Bass Swap Transition
 # ---------------------------------------------------------------------------
 
-def generate_bass_swap_transition(track_a_str, track_b_str, out_name, mode="with_vocals_with_fx"):
+def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
     """
-    Superhuman AI Bass Swap with Auto-Nudge and HPF Tension Sweep:
-      • Anchor: B's Drop is aligned to 16 beats AFTER A's Drop.
-      • Tension Build (16 beats): A's bass stem receives an HPF sweep (20Hz -> 250Hz).
-      • Pre-Blend: B's drums, vocals, and leads fade in (sidechained), but B's bass is MUTED.
-      • Nudging: B is phase-aligned to A using waveform cross-correlation at the swap point.
-      • The Swap: Exactly at the 16th beat, A's bass cuts, B's bass slams in at 100%.
-      • Post-Swap: A's highs/mids fade out over the next 16 beats.
+    Drop-Point Stem Swap:
+      • A plays at 100% energy up to the EXACT drop.
+      • B is 100% muted before the drop (no mud).
+      • At the exact drop: A's bass stops, B's bass comes in FULL.
+      • A's other stems (drums, synths) overlap and fade out slowly over 32 beats.
+      • B's other stems (drums, synths) fade in slowly over 32 beats.
+      • A's vocals use a "Baton Pass" - they are cut right before B's first vocal entry.
     """
-    print(f"\n[Bass Swap] {track_a_str} → {track_b_str}")
+    print(f"\n[Bass Swap] {track_a_str} -> {track_b_str}")
     with open(CRATE_FILE, 'r') as f:
         crate = json.load(f)
 
     a_orig = get_track_data(crate, track_a_str)
     b      = get_track_data(crate, track_b_str)
-    
-    if not a_orig.get("drop_confident") or not b.get("drop_confident"):
-        print(f"  SKIPPED: {out_name} — no confident drop on one side (Bass Swap isn't a good fit here)")
-        return
-        
     a      = apply_warping(a_orig, b["bpm"])
     sr     = a["sr"]
     spb    = int((60.0 / b["bpm"]) * sr)
 
-    a_swap = _safe_beat(a["beats"], a["drop_idx"] + 16)
+    # EXACT DROP POINTS
+    a_drop = _safe_beat(a["beats"], a["drop_idx"])
+    b_drop = _safe_beat(b["beats"], b["drop_idx"])
     
-    # B's intro anchor. We want 16 beats of build + 32 beats of post-drop
-    blend_len      = 16 * spb
-    post_len       = 32 * spb
-    post_blend_len = 16 * spb # For tails
-    b_swap         = int(b["beats"][b["drop_idx"]])
+    a_swap = a_drop
+    b_swap = b_drop
 
-    # Auto-Nudge B to A's exact phase. Sum drums and bass to lock the low end
-    max_nudge = int(0.05 * sr)
-    a_sync_chunk = a["drums"][a_swap:a_swap + spb] + a["bass"][a_swap:a_swap + spb]
-    b_sync_chunk = b["drums"][b_swap:b_swap + spb] + b["bass"][b_swap:b_swap + spb]
-    nudge = dsp_utils.calculate_phase_nudge(a_sync_chunk, b_sync_chunk, sr, max_nudge_samples=max_nudge)
-    b_swap -= nudge
-    print(f"  Auto-Nudge: shifting Track B by {nudge} samples ({nudge/sr*1000:.1f}ms)")
-    if abs(nudge) >= max_nudge:
-        print(f"  WARNING: nudge clamped at ±{max_nudge} samples — likely still misaligned")
-
-    # Whisper vocal boundaries
-    if "with_vocals" in mode:
-        # A_vocal_cut represents the absolute cutoff. 
-        # Instead of cutting exactly at a_swap, we allow A's vocal to continue over the drop.
-        a_vocal_cut, _ = dsp_utils.find_vocal_cutoff_in_buildup(a, max(0, a_swap - 8 * spb), a_swap + 16 * spb, sr)
-        b_vocal_entry, _ = dsp_utils.find_vocal_entry(b["vocals"], b_swap, sr)
+    # ------------------------------------------------------------------
+    # Whisper vocal boundaries - BATON PASS
+    # ------------------------------------------------------------------
+    # B: find first vocal onset after B's swap point
+    b_vocal_entry = dsp_utils.find_vocal_entry(b["vocals"], b_swap, sr)
+    b_entry_offset = b_vocal_entry - b_swap # How far after the drop does B sing?
+    
+    # A: cut vocals right before B sings
+    if b_entry_offset < int(1.5 * spb):
+        # B sings immediately at the drop. We MUST cut A's vocals during the build-up!
+        # Search the 16 beats before the drop for a phrase boundary.
+        a_vocal_cut = dsp_utils.find_vocal_cutoff_in_buildup(a, max(0, a_swap - 16 * spb), a_swap, sr)
+    else:
+        # B sings later. A can sing into the drop, then cut before B sings.
+        target_cut_point = a_swap + b_entry_offset - (1 * spb)
+        a_vocal_cut = dsp_utils.find_vocal_cutoff_in_buildup(a, a_swap, max(a_swap + 8 * spb, target_cut_point), sr)
         
-        # Vocal Clash Prevention: The Baton Pass
-        # We must ensure A's vocal does NOT overlap with B's vocal.
-        if b_vocal_entry is not None:
-            # relative offset of B's vocal after the drop (e.g. +3.4s)
-            b_entry_rel = b_vocal_entry - b_swap 
-            
-            # Max allowed A cut is exactly 1 beat BEFORE B's vocal starts
-            max_a_cut = a_swap + b_entry_rel - spb
-            
-            if a_vocal_cut > max_a_cut:
-                print(f"  Vocal Clash Prevention: cutting A's vocal early to avoid B's entry!")
-                a_vocal_cut = max_a_cut
-    else:
-        a_vocal_cut = 0
-        b_vocal_entry = None
+    # Ensure we don't cut later than B's actual entry!
+    if (a_vocal_cut - a_swap) > b_entry_offset:
+        a_vocal_cut = a_swap + max(0, b_entry_offset - int(0.5 * spb)) # hard cap it
 
-    print(f"  A vocal cut at sample {a_vocal_cut} ({a_vocal_cut/sr:.2f}s)")
-    if b_vocal_entry is not None:
-        print(f"  B vocal entry at sample {b_vocal_entry} ({b_vocal_entry/sr:.2f}s)")
-    else:
-        print(f"  B vocal entry at sample None")
+    print(f"  B vocal entry: {b_entry_offset/sr:.2f}s after drop")
+    print(f"  A vocal cut: {(a_vocal_cut - a_swap)/sr:.2f}s after drop")
 
-    pre_len   = int(10 * sr)
-    blend_len = 16 * spb       # 16 beat tension build before the swap
-    post_len  = 16 * spb + int(10 * sr) # 16 beat post-blend + 10s tail
+    pre_len   = int(10 * sr) # 10s of build-up
+    blend_len = 32 * spb     # 32 beats of secret crossfade post-drop
+    post_len  = int(10 * sr) # 10s of B solo
     total_len = pre_len + blend_len + post_len
 
     out = np.zeros((total_len, 2), dtype=np.float32)
-    swap_out_idx = pre_len + blend_len
 
     # ------------------------------------------------------------------
-    # Pre (10s of A before the tension build starts)
+    # Pre-Drop: A at full energy (B is 100% muted)
     # ------------------------------------------------------------------
-    a_build_start = a_swap - blend_len
-    a_pre_start = max(0, a_build_start - pre_len)
-    actual_pre = a_build_start - a_pre_start
+    a_pre_start = max(0, a_swap - pre_len)
+    actual_pre  = a_swap - a_pre_start
     out_pre_off = pre_len - actual_pre
     
     if actual_pre > 0:
-        for stem in ["drums", "bass", "other"]:
-            wl = _write_len(out, out_pre_off, a[stem], a_pre_start, a_build_start)
+        for stem in ["drums", "bass", "other", "vocals"]:
+            wl = _write_len(out, out_pre_off, a[stem], a_pre_start, a_swap)
             out[out_pre_off:out_pre_off + wl] += a[stem][a_pre_start:a_pre_start + wl]
-        
-        # A vocals
-        if a_vocal_cut > a_pre_start:
-            v_end = min(a_vocal_cut, a_build_start)
-            wl = _write_len(out, out_pre_off, a["vocals"], a_pre_start, v_end)
-            out[out_pre_off:out_pre_off + wl] += a["vocals"][a_pre_start:a_pre_start + wl]
 
-    # ------------------------------------------------------------------
-    # The Tension Build (16 beats leading up to the swap)
-    # A's Bass is HPF Swept. B fades in (Bass MUTED).
-    # ------------------------------------------------------------------
-    a_build_end = min(a_swap, len(a["bass"]))
-    wl_build = a_build_end - a_build_start
+    # White noise impact at the exact drop to mask the bass switch
+    noise_len = int(2.0 * spb)
+    noise_mono = dsp_utils.generate_white_noise_sweep(noise_len, sr)
+    # We want an impact, so reverse the sweep to make it a decay instead of a rise
+    noise_mono = noise_mono[::-1] * 0.4
+    noise_stereo = np.stack([noise_mono, noise_mono], axis=1)
     
-    if wl_build > 0:
-        # A drums, other (untouched)
-        for stem in ["drums", "other"]:
-            out[pre_len:pre_len + wl_build] += a[stem][a_build_start:a_build_end]
-            
-        # A vocals (up to cut)
-        v_start = max(a_build_start, 0)
-        v_end = min(a_vocal_cut, a_build_end)
-        if v_end > v_start:
-            v_wl = v_end - v_start
-            v_out_idx = pre_len + (v_start - a_build_start)
-            out[v_out_idx:v_out_idx + v_wl] += a["vocals"][v_start:v_end]
-            
-        # A Bass HPF Tension Sweep (20Hz -> 250Hz)
-        a_bass_build = a["bass"][a_build_start:a_build_end]
-        a_bass_swept = dsp_utils.apply_hpf_sweep(a_bass_build, sr, start_freq=20, end_freq=250, num_chunks=16)
-        out[pre_len:pre_len + wl_build] += a_bass_swept
+    noise_end = min(pre_len + noise_len, total_len)
+    nw = noise_end - pre_len
+    if nw > 0:
+        out[pre_len:noise_end] += noise_stereo[:nw]
 
-    # LUFS match
-    a_measure = a["bass"][max(0, a_swap - 4 * spb):a_swap] + a["drums"][max(0, a_swap - 4 * spb):a_swap]
-    b_measure = b["bass"][max(0, b_swap):min(b_swap + 4 * spb, len(b["bass"]))] + b["drums"][max(0, b_swap):min(b_swap + 4 * spb, len(b["drums"]))]
+    # ------------------------------------------------------------------
+    # Post-Drop Blend Zone: 32 beats of silent morphing
+    # ------------------------------------------------------------------
+    n = blend_len
+    t = np.linspace(0.0, np.pi / 2, n, dtype=np.float32)
+    fade_out = np.cos(t)[:, None]  
+    fade_in  = np.sin(t)[:, None]  
+
+    # LUFS gain match for B (Compare Drop to Drop, not Buildup to Drop)
+    a_measure = a["bass"][a_swap:min(a_swap + 4 * spb, len(a["bass"]))] + \
+                a["drums"][a_swap:min(a_swap + 4 * spb, len(a["drums"]))]
+    b_measure = b["bass"][b_swap:min(b_swap + 4 * spb, len(b["bass"]))] + \
+                b["drums"][b_swap:min(b_swap + 4 * spb, len(b["drums"]))]
     gain = _lufs_gain(a_measure, b_measure, sr)
-    print(f"  LUFS gain applied to B: {gain:.3f}×")
 
-    # ------------------------------------------------------------------
-    # The Tension Build (16 beats leading up to the swap)
-    # ------------------------------------------------------------------
-    # A fades out (cosine), B fades in (sine)
-    b_build_start = b_swap - blend_len
-    a_build_start = a_swap - blend_len
-    
-    # ------------------------------------------------------------------
-    # Calculate B's variance post-drop (Sparse vs Dense rule)
-    # ------------------------------------------------------------------
-    b_post_other = b["other"][b_swap:b_swap + int(16 * spb)]
-    if len(b_post_other) > int(0.05 * sr):
-        mono_b = np.mean(b_post_other, axis=1) if b_post_other.ndim == 2 else b_post_other
-        window_size = int(0.05 * sr)
-        num_windows = len(mono_b) // window_size
-        reshaped = mono_b[:num_windows * window_size].reshape(num_windows, window_size)
-        rms_windows = np.sqrt(np.mean(reshaped**2, axis=1))
-        b_variance = float(np.var(rms_windows))
-    else:
-        b_variance = 0.0
-        
-    is_dense = b_variance < 0.0015
-    print(f"  Track B Variance: {b_variance:.6f} -> {'Dense (Hard Swap)' if is_dense else 'Sparse (Gentle Swap)'}")
-    
-    t_in = np.linspace(0.0, np.pi / 2, blend_len, dtype=np.float32)
-    fade_in = np.sin(t_in)[:, None]
-    
-    if is_dense:
-        # Dense (Hard Swap): A stays at 100% to keep energy, B builds up underneath
-        a_fade_build = np.ones((blend_len, 1), dtype=np.float32)
-    else:
-        # Sparse (Gentle Swap): A dips slightly to 70% to make room for B's sweep
-        a_fade_build = (0.7 + 0.3 * np.cos(t_in))[:, None]
-    
-    # A's build-up. Drums and Other fade according to rule.
+    # 1. B Bass: FULL VOLUME IMMEDIATELY at the drop
+    b_bass_end = min(b_swap + blend_len, len(b["bass"]))
+    bbl = b_bass_end - b_swap
+    if bbl > 0:
+        out[pre_len:pre_len + bbl] += b["bass"][b_swap:b_bass_end] * gain
+
+    # 2. A Mids/Highs: Fade out silently over 32 beats (Bass is 0)
     for stem in ["drums", "other"]:
-        a_src_start = max(0, a_build_start)
-        a_src_end = min(a_swap, len(a[stem]))
-        wl_a = a_src_end - a_src_start
-        if wl_a > 0:
-            out_idx = pre_len + (a_src_start - a_build_start)
-            chunk = np.copy(a[stem][a_src_start:a_src_end])
-            
-            if stem == "drums":
-                # Apply HPF to Track A's drums during build-up to carve out space and build tension
-                chunk = dsp_utils.apply_hpf(chunk, sr, 100)
-                
-            out[out_idx:out_idx + wl_a] += chunk * a_fade_build[-wl_a:]
-            
-    # Vocals (play until cut)
-    a_src_start = max(0, a_build_start)
-    a_src_end = min(a_vocal_cut, len(a["vocals"]))
-    wl_a_vocal = a_src_end - a_src_start
-    if wl_a_vocal > 0:
-        out_idx = pre_len + (a_src_start - a_build_start)
-        out[out_idx:out_idx + wl_a_vocal] += a["vocals"][a_src_start:a_src_end]
-            
-    # A's bass plays until 1 beat before the drop (anticipation vacuum). 50ms micro-fade out to prevent pop.
-    a_bass_start = max(0, a_build_start)
-    a_bass_end = max(0, min(a_swap - spb, len(a["bass"])))
-    wl_a_bass = a_bass_end - a_bass_start
-    if wl_a_bass > 0:
-        out_idx = pre_len + (a_bass_start - a_build_start)
-        chunk = np.copy(a["bass"][a_bass_start:a_bass_end])
-        
-        fade_len = int(0.05 * sr)  # 50ms
-        if fade_len > wl_a_bass:
-            fade_len = wl_a_bass
-            
-        if fade_len > 0:
-            curve = np.cos(np.linspace(0.0, np.pi / 2, fade_len, dtype=np.float32))
-            chunk[-fade_len:] *= curve[:, np.newaxis]
-                
-        out[out_idx:out_idx + wl_a_bass] += chunk
-    
-    for stem in ["drums", "other", "vocals"]:
-        # If no vocals, skip vocals stem completely
-        if stem == "vocals" and "no_vocals" in mode:
-            continue
-            
-        b_src_start = max(0, b_build_start)
-        b_src_end = min(b_swap, len(b[stem]))
-        wl_b = b_src_end - b_src_start
-        if wl_b > 0:
-            out_idx = pre_len + (b_src_start - b_build_start)
-            chunk = np.copy(b[stem][b_src_start:b_src_end])
-            
-            if stem == "vocals":
-                v_mask_start = max(0, b_vocal_entry - b_src_start) if b_vocal_entry else wl_b
-                if v_mask_start > 0 and v_mask_start < wl_b:
-                    chunk[:v_mask_start] = 0.0
-                elif v_mask_start >= wl_b:
-                    chunk[:] = 0.0
-                out[out_idx:out_idx + wl_b] += chunk * gain
-            else:
-                if stem == "drums":
-                    chunk = dsp_utils.apply_hpf(chunk, sr, 100)
-                elif stem == "other" and "with_fx" in mode:
-                    chunk = dsp_utils.apply_lpf_sweep(chunk, sr, start_freq=500, end_freq=20000, num_chunks=16)
-                out[out_idx:out_idx + wl_b] += chunk * fade_in[-wl_b:] * gain
+        src_end = min(a_swap + blend_len, len(a[stem]))
+        wl = src_end - a_swap
+        if wl > 0:
+            out[pre_len:pre_len + wl] += a[stem][a_swap:src_end] * fade_out[:wl]
 
-    # ------------------------------------------------------------------
-    # Echo tail for A's vocal
-    # ------------------------------------------------------------------
-    if a_vocal_cut > spb and "with_fx" in mode and "with_vocals" in mode:
+    # 3. B Mids/Highs: Fade in silently over 32 beats
+    for stem in ["drums", "other"]:
+        src_end = min(b_swap + blend_len, len(b[stem]))
+        wl = src_end - b_swap
+        if wl > 0:
+            out[pre_len:pre_len + wl] += b[stem][b_swap:src_end] * fade_in[:wl] * gain
+
+    # 4. A Vocals: Play at full volume until a_vocal_cut, then echo out
+    if a_vocal_cut > a_swap:
+        wl = a_vocal_cut - a_swap
+        # They play full volume
+        out[pre_len:pre_len + wl] += a["vocals"][a_swap:a_vocal_cut]
+        
+        # Add echo tail right after the cut
         vocal_snip = a["vocals"][a_vocal_cut - spb:a_vocal_cut]
-        echo_tail  = dsp_utils.generate_echo_tail(vocal_snip, sr, b["bpm"], beats=4)
+        echo_tail = dsp_utils.generate_echo_tail(vocal_snip, sr, b["bpm"], beats=4)
         if echo_tail.ndim == 1:
             echo_stereo = np.stack([echo_tail, echo_tail], axis=1)
         else:
             echo_stereo = echo_tail
             
-        # The out index is relative to where A's vocal cut happened.
-        # Note: a_vocal_cut could now be PAST a_swap.
-        if a_vocal_cut <= a_swap:
-            # Cut happened before/at the drop
-            out_vocal_cut = pre_len + blend_len - (a_swap - a_vocal_cut)
-        else:
-            # Cut happened after the drop
-            out_vocal_cut = pre_len + blend_len + (a_vocal_cut - a_swap)
-            
+        out_vocal_cut = pre_len + wl
         tail_len = min(len(echo_stereo), total_len - out_vocal_cut)
         if tail_len > 0 and out_vocal_cut >= 0:
-            out[out_vocal_cut:out_vocal_cut + tail_len] += echo_stereo[:tail_len] * 1.0
+            out[out_vocal_cut:out_vocal_cut + tail_len] += echo_stereo[:tail_len] * 0.7
+
+    # 5. B Vocals: Enter when they enter, at full volume
+    b_vocal_delay = b_vocal_entry - b_swap
+    if b_vocal_delay < blend_len:
+        src_end = min(b_swap + blend_len, len(b["vocals"]))
+        wl = src_end - b_vocal_entry
+        if wl > 0:
+            out_start = pre_len + b_vocal_delay
+            # We fade them in quickly so they don't click, then full volume
+            v_fade_len = min(spb, wl)
+            v_fade = np.concatenate([
+                np.linspace(0.0, 1.0, v_fade_len, dtype=np.float32),
+                np.ones(wl - v_fade_len, dtype=np.float32)
+            ])[:, None]
+            out[out_start:out_start + wl] += b["vocals"][b_vocal_entry:src_end] * v_fade * gain
 
     # ------------------------------------------------------------------
-    # Wash-out Echo Tail for Track A
-    # We apply this to both Hard and Gentle Swaps now to mask the dry cut.
+    # Post-Blend: B Solo (everything at 1.0 gain)
     # ------------------------------------------------------------------
-    if a_swap > 4 * spb and "with_fx" in mode:
-        # Grab a larger snippet (8 beats) of the synths/leads right before the drop
-        wash_snip = a["other"][a_swap - 8 * spb : a_swap]
-        wash_tail = dsp_utils.generate_echo_tail(wash_snip, sr, a["bpm"], beats=8)
-        if wash_tail.ndim == 1:
-            wash_tail = np.stack([wash_tail, wash_tail], axis=1)
-        tail_len = min(len(wash_tail), total_len - swap_out_idx)
-        if tail_len > 0:
-            # Filter it so it doesn't clash with B's leads, just sits in the background
-            wash_tail = dsp_utils.apply_lpf(wash_tail, sr, 1500)
-            wash_tail = dsp_utils.apply_hpf(wash_tail, sr, 300)
-            out[swap_out_idx:swap_out_idx + tail_len] += wash_tail[:tail_len] * 0.6
+    b_post_start = b_swap + blend_len
+    b_post_end   = min(len(b["drums"]), b_post_start + post_len)
+    wl_post      = b_post_end - b_post_start
+    out_post_off = pre_len + blend_len
+    if wl_post > 0:
+        for stem in ["drums", "bass", "other", "vocals"]:
+            # Protect against differing stem lengths
+            stem_len = len(b[stem])
+            end = min(stem_len, b_post_start + wl_post)
+            w = end - b_post_start
+            if w > 0:
+                out[out_post_off:out_post_off + w] += b[stem][b_post_start:end] * gain
 
-    # B's bass drops exactly at the swap. 5ms micro-fade in to prevent zero-crossing pop.
-    b_bass_start = max(0, b_swap)
-    b_bass_end = min(b_swap + post_len, len(b["bass"]))
-    wl_b_bass = b_bass_end - b_bass_start
-    if wl_b_bass > 0:
-        out_idx = swap_out_idx + (b_bass_start - b_swap)
-        chunk = np.copy(b["bass"][b_bass_start:b_bass_end])
-        
-        fade_len = int(0.005 * sr)  # 5ms
-        if fade_len > wl_b_bass:
-            fade_len = wl_b_bass
-            
-        if fade_len > 0:
-            curve = np.sin(np.linspace(0.0, np.pi / 2, fade_len, dtype=np.float32))
-            chunk[:fade_len] *= curve[:, np.newaxis]
-                
-        out[out_idx:out_idx + wl_b_bass] += chunk * gain
+    # Soft Clipper to prevent vocal/clash muffling
+    out = normalize(out)
+    print(f"  Saved -> {out_name}")
+    sf.write(out_name, out, sr)
 
-    # ------------------------------------------------------------------
-    # The Swap & Post-Blend (16 or 32 beats fading A out, B at full power)
-    # ------------------------------------------------------------------
-    if is_dense:
-        post_blend_len = int(spb) # Just a tiny 1-beat fade to avoid clicks
-        t_out = np.linspace(0.0, np.pi / 2, post_blend_len, dtype=np.float32)
-        fade_out_post = np.cos(t_out)[:, None]
-    else:
-        post_blend_len = 32 * spb # Long 32-beat carry-over
-        t_out = np.linspace(0.0, np.pi / 2, post_blend_len, dtype=np.float32)
-        fade_out_post = np.cos(t_out)[:, None]
-    
-    # A fades out (drums, other) over post-swap
-    for stem in ["drums", "other"]:
-        a_post_start = max(0, a_swap)
-        a_post_end = min(a_swap + post_blend_len, len(a[stem]))
-        wl_a = a_post_end - a_post_start
-        if wl_a > 0:
-            out_idx = swap_out_idx + (a_post_start - a_swap)
-            chunk = np.copy(a[stem][a_post_start:a_post_end])
-            
-            if not is_dense:
-                # For Sparse transitions, apply HPF so only Treble carries over (no mid-mud)
-                chunk = dsp_utils.apply_hpf(chunk, sr, 2000)
-                
-            out[out_idx:out_idx + wl_a] += chunk * fade_out_post[:wl_a]
-            
-    # If A's vocal carries over the drop, we add it here in the post-swap section
-    if "with_vocals" in mode and a_vocal_cut > a_swap:
-        a_vocal_post_start = a_swap
-        a_vocal_post_end = a_vocal_cut
-        wl_a_vocal_post = a_vocal_post_end - a_vocal_post_start
-        if wl_a_vocal_post > 0:
-            out_idx = swap_out_idx
-            chunk = np.copy(a["vocals"][a_vocal_post_start:a_vocal_post_end])
-            out[out_idx:out_idx + wl_a_vocal_post] += chunk
-
-    # B slams in full power (Drums, Other, Vocals)
-    for stem in ["drums", "other", "vocals"]:
-        if stem == "vocals" and "no_vocals" in mode:
-            continue
-            
-        b_post_start = max(0, b_swap)
-        b_post_end = min(b_swap + post_len, len(b[stem]))
-        wl_b = b_post_end - b_post_start
-        if wl_b > 0:
-            out_idx = swap_out_idx + (b_post_start - b_swap)
-            chunk = np.copy(b[stem][b_post_start:b_post_end])
-            
-            if stem == "vocals":
-                v_mask_start = max(0, b_vocal_entry - b_post_start) if b_vocal_entry is not None else wl_b
-                if v_mask_start > 0 and v_mask_start < wl_b:
-                    chunk[:v_mask_start] = 0.0
-                elif v_mask_start >= wl_b:
-                    chunk[:] = 0.0
-                    
-            out[out_idx:out_idx + wl_b] += chunk * gain
-
-    out_path = os.path.join(OUTPUT_DIR, out_name)
-    sf.write(out_path, normalize(out), sr)
-    print(f"  Saved → {out_path}")
-
-
-# ---------------------------------------------------------------------------
-# T2 — Treble Swap (Outro → Intro)
-# ---------------------------------------------------------------------------
 
 def generate_treble_swap_transition(track_a_str, track_b_str, out_name):
     """
