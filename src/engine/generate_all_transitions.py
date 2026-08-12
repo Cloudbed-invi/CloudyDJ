@@ -458,13 +458,32 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
     if bbl > 0:
         out[drop_out:drop_out + bbl] += b["bass"][b_swap:b_bass_end] * gain
 
-    # 2. Drums & Other: 16-beat Equal-Power Crossfade
+    # 2. Drums & Other: 16-beat Equal-Power Crossfade for drums, Wash Out for A's other
     for stem in ["drums", "other"]:
-        # A fades out over 16 beats.
-        src_end = min(a_swap + blend_len, len(a[stem]))
-        wl = src_end - a_swap
-        if wl > 0:
-            out[drop_out:drop_out + wl] += a[stem][a_swap:src_end] * fade_out[:wl]
+        if stem == "drums":
+            # A drums fade out over blend_len.
+            src_end = min(a_swap + blend_len, len(a[stem]))
+            wl = src_end - a_swap
+            if wl > 0:
+                out[drop_out:drop_out + wl] += a[stem][a_swap:src_end] * fade_out[:wl]
+        else:
+            # A's 'other' (synths) Wash Out: hard cut at drop, massive reverb tail
+            wash_start = max(0, a_swap - 2 * spb)
+            if a_swap > wash_start:
+                synth_snip = a["other"][wash_start:a_swap]
+                
+                # Use high-quality pedalboard reverb, NOT the dirty noise convolution
+                from src.engine import effects
+                padded_snip = np.zeros((len(synth_snip) + blend_len, 2), dtype=np.float32)
+                padded_snip[:len(synth_snip)] = synth_snip
+                wash_tail = effects.reverb_throw(padded_snip, len(padded_snip), sr)
+                
+                # Isolate the tail (the part after the snip ends)
+                tail = wash_tail[len(synth_snip):]
+                
+                wl_tail = min(len(tail), blend_len)
+                if wl_tail > 0:
+                    out[drop_out:drop_out + wl_tail] += tail[:wl_tail] * 0.7
             
         src_end_b = min(b_swap + blend_len, len(b[stem]))
         wl_b = src_end_b - b_swap
@@ -486,19 +505,25 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
         echo_src_start = max(0, a_vocal_cut - spb)
         echo_src_end   = max(echo_src_start + 1, a_vocal_cut)
 
-    # Echo tail: only add if B doesn't sing immediately (would clash)
+    # Loop Roll: only add if B doesn't sing immediately (would clash)
     if b_entry_offset > int(2 * spb) and echo_src_end > echo_src_start and echo_src_start >= 0:
-        vocal_snip = a["vocals"][echo_src_start:echo_src_end]
-        echo_tail  = dsp_utils.generate_echo_tail(vocal_snip, sr, b["bpm"], beats=4)
-        echo_lpf   = dsp_utils.apply_lpf(echo_tail, sr, 600)  # very dark echo
-        if echo_lpf.ndim == 1:
-            echo_stereo = np.stack([echo_lpf, echo_lpf], axis=1)
-        else:
-            echo_stereo = echo_lpf
-        echo_out_start = drop_out + max(0, a_vcut_offset)
-        tail_len = min(len(echo_stereo), total_len - echo_out_start)
-        if tail_len > 0:
-            out[echo_out_start:echo_out_start + tail_len] += echo_stereo[:tail_len] * 0.35
+        vocal_snip = a["vocals"][echo_src_start:echo_src_end] # This is exactly 1 spb long
+        # Repeat it to fill the gap until B enters, max 16 beats
+        roll_beats = min(16, int(b_entry_offset / spb))
+        roll_len = roll_beats * spb
+        roll_audio = np.tile(vocal_snip, (roll_beats, 1))
+        
+        # Apply LPF to push it back
+        roll_audio = dsp_utils.apply_lpf(roll_audio, sr, 1000)
+        
+        # Fade out the roll so it doesn't abruptly stop
+        t_fade = np.linspace(1, 0, roll_len, dtype=np.float32)
+        roll_audio *= t_fade[:, None]
+        
+        roll_out_start = drop_out + max(0, a_vcut_offset)
+        wl_roll = min(len(roll_audio), total_len - roll_out_start)
+        if wl_roll > 0:
+            out[roll_out_start:roll_out_start + wl_roll] += roll_audio[:wl_roll] * 0.4
 
     # 5. B Vocals: enter at phrase start.
     #    Only do an HPF sweep reveal if B enters >2 beats after the drop —
