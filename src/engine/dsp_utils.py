@@ -558,6 +558,58 @@ def find_vocal_entry(vocal_stem, start_sample, sr):
     return start_sample
 
 
+def find_strong_phrase_entry(vocal_stem, start_sample, sr, min_gap_s=0.4):
+    """
+    Find the first vocal onset AFTER start_sample that begins a 'fresh line'
+    (i.e. follows a pause of at least min_gap_s), avoiding cutting in mid-sentence.
+    Returns the sample position.
+    """
+    mono = _to_mono(vocal_stem)
+    search_end = min(start_sample + int(30 * sr), len(mono))
+    search_audio = mono[start_sample:search_end]
+
+    if len(search_audio) < int(0.5 * sr):
+        return start_sample
+
+    try:
+        whisper_sr = 16000
+        search_16k = librosa.resample(search_audio, orig_sr=sr, target_sr=whisper_sr)
+        import whisper
+        model = whisper.load_model("tiny", device="cpu")
+        result = whisper.transcribe(model, search_16k, language="en", word_timestamps=True)
+        words = [w for seg in result.get("segments", []) for w in seg.get("words", [])]
+
+        if words:
+            # First word is always a candidate if it's the very beginning of the audio snippet,
+            # but we want to ensure it really feels like a strong start.
+            best_entry = None
+            
+            # Check the gap before each word
+            last_end = 0.0
+            for w in words:
+                gap = w["start"] - last_end
+                if gap >= min_gap_s:
+                    best_entry = start_sample + int(w["start"] * sr)
+                    print(f"  B strong phrase entry: '{w['word'].strip()}' "
+                          f"(gap: {gap:.2f}s) at {w['start']:.2f}s after swap")
+                    return best_entry
+                last_end = w["end"]
+
+            if best_entry is None:
+                # Fallback to the first word if no large gaps were found
+                first_word = words[0]
+                best_entry = start_sample + int(first_word["start"] * sr)
+                print(f"  B phrase entry (fallback to first word): "
+                      f"'{first_word['word'].strip()}' at {first_word['start']:.2f}s")
+                return best_entry
+
+    except Exception as e:
+        print(f"  Whisper strong phrase entry failed: {e}")
+
+    # Fallback to standard RMS entry
+    return find_vocal_entry(vocal_stem, start_sample, sr)
+
+
 # ---------------------------------------------------------------------------
 # Stem length alignment
 # ---------------------------------------------------------------------------
