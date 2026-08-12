@@ -385,7 +385,18 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
                 a["drums"][a_swap:min(a_swap + 4 * spb, len(a["drums"]))]
     b_measure = b["bass"][b_swap:min(b_swap + 4 * spb, len(b["bass"]))] + \
                 b["drums"][b_swap:min(b_swap + 4 * spb, len(b["drums"]))]
-    gain = min(_lufs_gain(a_measure, b_measure, sr), 1.2)  # cap: never amplify B by more than +1.6dB
+    gain = min(_lufs_gain(a_measure, b_measure, sr), 2.0)  # cap: never amplify B by more than +6dB
+
+    # Measure masking ratio to decide if we need to sidechain A's drums
+    a_drums_rms = np.sqrt(np.mean(dsp_utils._to_mono(a["drums"][a_swap:min(a_swap + 4 * spb, len(a["drums"]))])**2))
+    b_vocal_rms = np.sqrt(np.mean(dsp_utils._to_mono(b["vocals"][b_vocal_entry:min(b_vocal_entry + 4 * spb, len(b["vocals"]))])**2))
+    
+    needs_duck = False
+    if b_vocal_rms > 0.001:  # Only if B actually sings here
+        masking_ratio = a_drums_rms / (b_vocal_rms * gain + 1e-9)
+        if masking_ratio > 1.5:
+            needs_duck = True
+            print(f"  Masking detected (ratio={masking_ratio:.2f}x). Applying gentle sidechain duck to A's drums.")
 
     # ------------------------------------------------------------------
     # Pre-Drop: A at full energy (all 4 stems) — fills [0 .. drop_out]
@@ -473,7 +484,16 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
             src_end = min(a_swap + blend_len, len(a[stem]))
             wl = src_end - a_swap
             if wl > 0:
-                out[drop_out:drop_out + wl] += a[stem][a_swap:src_end] * fade_out[:wl]
+                a_drums_chunk = a[stem][a_swap:src_end] * fade_out[:wl]
+                if needs_duck:
+                    b_vocals_in_blend = b["vocals"][b_swap:b_swap + wl]
+                    if len(b_vocals_in_blend) < wl:
+                        if b_vocals_in_blend.ndim == 2:
+                            b_vocals_in_blend = np.pad(b_vocals_in_blend, ((0, wl - len(b_vocals_in_blend)), (0, 0)), 'constant')
+                        else:
+                            b_vocals_in_blend = np.pad(b_vocals_in_blend, (0, wl - len(b_vocals_in_blend)), 'constant')
+                    a_drums_chunk = dsp_utils.apply_sidechain_duck(a_drums_chunk, b_vocals_in_blend, sr)
+                out[drop_out:drop_out + wl] += a_drums_chunk
         else:
             # A's 'other' (synths) Wash Out: hard cut at drop, massive reverb tail
             wash_start = max(0, a_swap - 2 * spb)
@@ -542,7 +562,16 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
         if wl > 0:
             out_vstart = drop_out + b_entry_offset
             
-            # Apply a quick 10ms fade-in to the entering vocal to prevent zero-crossing clicks.
+            # Apply a reverb pre-wash echo-in
+            pre_wash = dsp_utils.apply_vocal_echo_in(
+                b["vocals"][b_vocal_entry:min(b_vocal_entry + 2 * spb, src_end)].copy(), sr, b["bpm"]
+            )
+            wash_start = max(drop_out, out_vstart - 2 * spb)
+            wl_wash = min(len(pre_wash), out_vstart - wash_start)
+            if wl_wash > 0:
+                out[wash_start:wash_start + wl_wash] += pre_wash[:wl_wash] * gain
+            
+            # Apply a quick 10ms fade-in to the entering dry vocal to prevent zero-crossing clicks.
             # No HPF sweep, so the vocal retains its full natural warmth.
             fade_samples = min(int(0.01 * sr), wl)
             snippet = b["vocals"][b_vocal_entry:src_end].copy()

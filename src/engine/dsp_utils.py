@@ -722,3 +722,65 @@ def generate_reverb_tail(audio_chunk, sr, decay_seconds=1.5):
         return np.stack([tail[:min_t], tail_r[:min_t]], axis=1)
 
     return tail
+
+def apply_sidechain_duck(target_audio, sidechain_audio, sr,
+                          ratio=0.75, attack_ms=80, release_ms=200, threshold=0.01):
+    """
+    Gently reduce target_audio when sidechain_audio (B vocals) is active.
+    ratio=0.75 means target goes to 75% when sidechain is loud.
+    Smooth attack/release prevents pumping.
+    """
+    import librosa
+    hop = 512
+    sc_mono = _to_mono(sidechain_audio)
+    rms = librosa.feature.rms(y=sc_mono, frame_length=1024, hop_length=hop)[0]
+    
+    attack_f  = max(1, int(attack_ms  / 1000 * sr / hop))
+    release_f = max(1, int(release_ms / 1000 * sr / hop))
+    
+    # Smooth the RMS envelope with asymmetric attack/release
+    env = np.zeros_like(rms)
+    for i in range(1, len(rms)):
+        if rms[i] > env[i-1]:
+            env[i] = env[i-1] + (rms[i] - env[i-1]) / attack_f
+        else:
+            env[i] = env[i-1] + (rms[i] - env[i-1]) / release_f
+    
+    # Gate: only duck when above threshold
+    gate = np.where(env > threshold, 1.0, 0.0)
+    gain_reduction = 1.0 - gate * (1.0 - ratio)  # 1.0 when silent, ratio when active
+    
+    # Upsample gain curve from frame domain to sample domain
+    gain_samples = np.repeat(gain_reduction, hop)[:len(target_audio)]
+    if len(gain_samples) < len(target_audio):
+        gain_samples = np.pad(gain_samples, (0, len(target_audio) - len(gain_samples)), constant_values=1.0)
+    
+    if target_audio.ndim == 2:
+        return (target_audio * gain_samples[:, None]).astype(np.float32)
+    return (target_audio * gain_samples).astype(np.float32)
+
+
+def apply_vocal_echo_in(vocal_audio, sr, bpm):
+    """
+    Generate a reverb pre-wash for B's incoming vocal.
+    Returns the wet-only reverb tail that plays 2 beats before the vocal.
+    """
+    from pedalboard import Pedalboard, Reverb
+    spb = int((60.0 / bpm) * sr)
+    # Take first 2 beats as the source for the reverb
+    source_len = min(2 * spb, len(vocal_audio))
+    source = vocal_audio[:source_len]
+    
+    board = Pedalboard([Reverb(room_size=0.35, wet_level=1.0, dry_level=0.0,
+                               damping=0.5, width=0.8)])
+    wet = board(source.T if source.ndim == 2 else source[np.newaxis,:], sr)
+    wet = wet.T if wet.ndim == 2 else wet
+    
+    # Fade the pre-wash in and out so it doesn't click
+    fade = np.hanning(len(wet)).astype(np.float32)
+    if wet.ndim == 2:
+        wet *= fade[:, None]
+    else:
+        wet *= fade
+    return wet * 0.25  # 25% wet — atmospheric, not dominant
+
