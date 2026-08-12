@@ -623,21 +623,43 @@ def find_strong_phrase_entry(vocal_stem, start_sample, sr, min_gap_s=0.4):
             # Check the gap before each word
             last_end = 0.0
             for w in words:
-                gap = w["start"] - last_end
+                word_start = w["start"]
+                # RMS GATE: Measure actual energy of vocal stem at this word to reject Whisper hallucinations
+                snippet_start = int(word_start * sr)
+                snippet_end = min(int((word_start + 0.5) * sr), len(search_audio))
+                if snippet_end > snippet_start:
+                    vocal_rms = np.sqrt(np.mean(search_audio[snippet_start:snippet_end]**2))
+                else:
+                    vocal_rms = 0.0
+                
+                if vocal_rms < 0.01:
+                    last_end = w["end"]
+                    continue  # Whisper hallucinated, skip this word
+
+                gap = word_start - last_end
                 if gap >= min_gap_s:
-                    best_entry = start_sample + int(w["start"] * sr)
+                    best_entry = start_sample + int(word_start * sr)
                     print(f"  B strong phrase entry: '{w['word'].strip()}' "
-                          f"(gap: {gap:.2f}s) at {w['start']:.2f}s after swap")
+                          f"(gap: {gap:.2f}s) at {word_start:.2f}s after swap (rms={vocal_rms:.3f})")
                     return best_entry
                 last_end = w["end"]
 
             if best_entry is None:
-                # Fallback to the first word if no large gaps were found
-                first_word = words[0]
-                best_entry = start_sample + int(first_word["start"] * sr)
-                print(f"  B phrase entry (fallback to first word): "
-                      f"'{first_word['word'].strip()}' at {first_word['start']:.2f}s")
-                return best_entry
+                # Fallback to the first valid word if no large gaps were found
+                for w in words:
+                    word_start = w["start"]
+                    snippet_start = int(word_start * sr)
+                    snippet_end = min(int((word_start + 0.5) * sr), len(search_audio))
+                    if snippet_end > snippet_start:
+                        vocal_rms = np.sqrt(np.mean(search_audio[snippet_start:snippet_end]**2))
+                    else:
+                        vocal_rms = 0.0
+                    
+                    if vocal_rms >= 0.01:
+                        best_entry = start_sample + int(word_start * sr)
+                        print(f"  B phrase entry (fallback to first valid word): "
+                              f"'{w['word'].strip()}' at {word_start:.2f}s (rms={vocal_rms:.3f})")
+                        return best_entry
 
     except Exception as e:
         print(f"  Whisper strong phrase entry failed: {e}")

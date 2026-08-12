@@ -45,6 +45,8 @@ def separate_all_stems(file_path, output_dir):
         file_path
     ], check=True)
 
+from src.engine.generate_all_transitions import detect_first_drop
+
 def update_crate(title, track_dir, bpm_hint=None):
     with open(CRATE_FILE, 'r') as f:
         crate = json.load(f)
@@ -59,23 +61,31 @@ def update_crate(title, track_dir, bpm_hint=None):
     # Calculate BPM from drums
     y, sr = sf.read(stems["drums"])
     if len(y.shape) > 1: y = y.mean(axis=1)
-    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+    tempo, beats = librosa.beat.beat_track(y=y, sr=sr, units='samples')
     bpm = float(tempo[0]) if isinstance(tempo, (list, tuple, np.ndarray)) else float(tempo)
     
     if bpm_hint:
         # snap to hint if close
         if abs(bpm - bpm_hint) > 10:
             bpm = bpm_hint
+
+    # Detect drop
+    y_bass, _ = sf.read(stems["bass"])
+    if len(y_bass.shape) > 1: y_bass = y_bass.mean(axis=1)
+    drop_beat_idx, _ = detect_first_drop(y_bass, beats, sr, bpm)
+    if drop_beat_idx <= 0 and len(beats) > 16:
+        drop_beat_idx = 16
             
     crate[title] = {
         "bpm": round(bpm),
+        "drop_idx": int(drop_beat_idx),
         "stems": stems
     }
     
     with open(CRATE_FILE, 'w') as f:
         json.dump(crate, f, indent=4)
         
-    print(f"Added {title} to crate with BPM {round(bpm)}")
+    print(f"Added {title} to crate with BPM {round(bpm)} and drop_idx {int(drop_beat_idx)}")
 
 if __name__ == "__main__":
     import numpy as np

@@ -79,34 +79,42 @@ def detect_key(audio, sr):
 
 
 def detect_first_drop(bass_mono, beats, sr, bpm):
-    """Bass RMS contrast scan between 30 s and 120 s."""
+    """Bass RMS sustained energy scan between 10 s and 80% of track length."""
     hop = 1024
     rms = librosa.feature.rms(y=bass_mono, frame_length=2048, hop_length=hop)[0]
     
-    # 2. Smooth the RMS envelope
+    # Smooth the RMS envelope
     smooth_len = int((60.0 / bpm) * sr / hop) # 1 beat smoothing
     if smooth_len > 0:
         rms = uniform_filter1d(rms, size=smooth_len)
 
     mean_bass = np.mean(rms) + 1e-9
     frames_per_sec = sr / hop
-    start_frame = int(30 * frames_per_sec)
-    end_frame   = int(120 * frames_per_sec)
+    start_frame = int(10 * frames_per_sec)
+    end_frame   = int(len(rms) * 0.8)
 
-    best_frame, max_contrast = 0, 0
-    window = smooth_len * 32
-    for frame_idx in range(max(window, start_frame), min(end_frame, len(rms) - window)):
+    best_frame, best_score = 0, 0
+    window = smooth_len * 16
+    sustain_window = smooth_len * 32
+    
+    for frame_idx in range(max(window, start_frame), min(end_frame, len(rms) - sustain_window)):
         pre_mean  = np.mean(rms[max(0, frame_idx - window):frame_idx])
-        post_mean = np.mean(rms[frame_idx:frame_idx + window])
-        contrast  = post_mean - pre_mean
-        if contrast > max_contrast and post_mean > 0.03:
-            max_contrast = contrast
-            best_frame   = frame_idx
+        post_mean = np.mean(rms[frame_idx:frame_idx + sustain_window])
+        score = post_mean * (1 + (post_mean - pre_mean) / (pre_mean + 1e-6))
+        if score > best_score and post_mean > 0.02:
+            best_score = score
+            best_frame = frame_idx
 
-    confidence = max_contrast / mean_bass
+    confidence = best_score / mean_bass
 
     if best_frame == 0 or confidence < 0.5:
         return np.argmin(np.abs(beats - (60 * sr))), False
+
+    # Safety net: scan forward to ensure bass > 0.05
+    for frame_idx in range(best_frame, min(best_frame + int(10 * frames_per_sec), len(rms))):
+        if rms[frame_idx] > 0.05:
+            best_frame = frame_idx
+            break
 
     drop_sample = librosa.frames_to_samples(best_frame, hop_length=hop)
     return np.argmin(np.abs(beats - drop_sample)), True
