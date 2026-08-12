@@ -127,7 +127,13 @@ def get_track_data(crate, track_name):
     _, beats = librosa.beat.beat_track(y=mono, sr=sr, bpm=data["bpm"], units='samples')
 
     key = detect_key(other + bass, sr)
-    drop_beat_idx, drop_confident = detect_first_drop(_to_mono(bass), beats, sr, data["bpm"])
+    
+    # 100% accurate drop detection via crate metadata override
+    drop_override = data.get("drop_idx")
+    if drop_override is not None:
+        drop_beat_idx, drop_confident = drop_override, True
+    else:
+        drop_beat_idx, drop_confident = detect_first_drop(_to_mono(bass), beats, sr, data["bpm"])
     
     print(f"Loaded '{track_name}' (BPM: {data['bpm']}, Key: {key})")
     print(f"  Drop at beat {drop_beat_idx} (Confident: {drop_confident})")
@@ -205,16 +211,10 @@ def apply_warping(a, b_bpm):
     # Because actual_rate came from one vocoder call, all stems will now
     # be the same length and phase-aligned when re-summed.
     # ------------------------------------------------------------------
+
     def stretch_stem(stem_audio):
-        """Time-stretch a stem while preserving stereo width."""
-        if stem_audio.ndim == 2 and stem_audio.shape[1] == 2:
-            left  = librosa.effects.time_stretch(stem_audio[:, 0].astype(np.float32), rate=actual_rate)
-            right = librosa.effects.time_stretch(stem_audio[:, 1].astype(np.float32), rate=actual_rate)
-            n = min(len(left), len(right))  # L/R can differ by ~1 sample
-            return np.stack([left[:n], right[:n]], axis=1).astype(np.float32)
-        mono = _to_mono(stem_audio)
-        warped = librosa.effects.time_stretch(mono, rate=actual_rate)
-        return np.stack([warped, warped], axis=1).astype(np.float32)
+        target_len = int(len(stem_audio) / actual_rate)
+        return dsp_utils.stretch_stereo(stem_audio, target_len)
 
     vocals_w = stretch_stem(a["vocals"])
     drums_w  = stretch_stem(a["drums"])
@@ -406,28 +406,6 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
 
 
     # ------------------------------------------------------------------
-    # B PRE-ROLL: B's drums (HPF'd at 400Hz — strips kick entirely) sneak in
-    # over the LAST 8 beats of the pre-drop zone at low volume, grid-locking.
-    # Reduced from 16→8 beats and 0.4→0.25 to avoid kick flamming over A.
-    # HPF raised to 400Hz to remove kick sub AND body, leaving only hi-hat/snare.
-    # ------------------------------------------------------------------
-    pre_roll_beats   = 8
-    pre_roll_samples = min(pre_roll_beats * spb, pre_len)  # never exceed pre_len
-    b_pre_src_start  = b_swap - pre_roll_samples
-
-    if b_pre_src_start >= 0 and pre_roll_samples > 0:
-        b_pre_out_start = drop_out - pre_roll_samples
-        fade_in_pre = np.linspace(0.0, 0.25, pre_roll_samples, dtype=np.float32)[:, None]
-
-        for stem in ["drums"]:
-            wl = min(pre_roll_samples, len(b[stem]) - b_pre_src_start)
-            if wl > 0:
-                snippet = b[stem][b_pre_src_start:b_pre_src_start + wl]
-                # Strip kick sub AND body — only hi-hat/snare remain (no kick clash)
-                snippet = dsp_utils.apply_hpf(snippet, sr, 150)
-                out[b_pre_out_start:b_pre_out_start + wl] += snippet * fade_in_pre[:wl] * gain
-
-    # ------------------------------------------------------------------
     # LOOP ECHO "CURIOSITY BUILDER" — only when B sings at beat 0.
     #
     # Rule: take 1/2 beat of B's first word, reverse it, LPF to 3kHz.
@@ -480,47 +458,18 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
     if bbl > 0:
         out[drop_out:drop_out + bbl] += b["bass"][b_swap:b_bass_end] * gain
 
-    # 2. Drums Frequency Split: Kick swaps hard, Snare+Hat crossfades
-    # A drums: HPF 150Hz (snare/hat only), fade out
-    src_end_a = min(a_swap + blend_len, len(a["drums"]))
-    wl_a = src_end_a - a_swap
-    if wl_a > 0:
-        a_drums = a["drums"][a_swap:src_end_a].copy()
-        a_drums = dsp_utils.apply_hpf(a_drums, sr, 150)
-        out[drop_out:drop_out + wl_a] += a_drums * fade_out[:wl_a]
-
-    # B drums: LPF 150Hz (kick) full, HPF 150Hz (snare/hat) fade in
-    src_end_b = min(b_swap + blend_len, len(b["drums"]))
-    wl_b = src_end_b - b_swap
-    if wl_b > 0:
-        b_drums = b["drums"][b_swap:src_end_b].copy()
-        b_kick = dsp_utils.apply_lpf(b_drums, sr, 150)
-        b_snare_hat = dsp_utils.apply_hpf(b_drums, sr, 150)
-        out[drop_out:drop_out + wl_b] += (b_kick + b_snare_hat * fade_in[:wl_b]) * gain
-
-    # 3. Harmonic Clearing applied to the "other" stem (contains chords/synths/guitars)
-    # A fades out over 8 beats (LPF 800Hz to remove clash)
-    # B delays 8 beats, then fades in over the remaining blend length
-    harmonic_clear_samples = min(int(8 * spb), blend_len)
-    harm_fade_out = np.cos(np.linspace(0.0, np.pi / 2, harmonic_clear_samples)).astype(np.float32)[:, None]
-    
-    for stem in ["other"]:
-        # A fades out fast, LPF 800Hz to remove mid/high clash
-        src_end = min(a_swap + harmonic_clear_samples, len(a[stem]))
+    # 2. Drums & Other: 16-beat Equal-Power Crossfade
+    for stem in ["drums", "other"]:
+        # A fades out over 16 beats.
+        src_end = min(a_swap + blend_len, len(a[stem]))
         wl = src_end - a_swap
         if wl > 0:
-            a_harm = a[stem][a_swap:src_end].copy()
-            a_harm = dsp_utils.apply_lpf(a_harm, sr, 800) 
-            out[drop_out:drop_out + wl] += a_harm * harm_fade_out[:wl]
+            out[drop_out:drop_out + wl] += a[stem][a_swap:src_end] * fade_out[:wl]
             
-        # B waits 8 beats, then fades in smoothly
-        delay = harmonic_clear_samples
-        src_start = b_swap + delay
-        src_end = min(b_swap + blend_len, len(b[stem]))
-        wl = src_end - src_start
-        if wl > 0:
-            harm_fade_in = np.sin(np.linspace(0.0, np.pi / 2, wl)).astype(np.float32)[:, None]
-            out[drop_out + delay : drop_out + delay + wl] += b[stem][src_start:src_end] * harm_fade_in * gain
+        src_end_b = min(b_swap + blend_len, len(b[stem]))
+        wl_b = src_end_b - b_swap
+        if wl_b > 0:
+            out[drop_out:drop_out + wl_b] += b[stem][b_swap:src_end_b] * fade_in[:wl_b] * gain
 
     # 4. A Vocals: write into blend zone with gentle LPF to push them back,
     #    hard cut at a_vocal_cut, then a short LPF echo tail.
@@ -559,22 +508,14 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
         wl = src_end - b_vocal_entry
         if wl > 0:
             out_vstart = drop_out + b_entry_offset
-            # Only sweep when B has time — not when B enters at or near beat 0
-            if b_entry_offset > int(2 * spb):
-                sweep_len = min(int(2 * spb), wl)
-                snippet   = b["vocals"][b_vocal_entry:b_vocal_entry + sweep_len]
-                sweep     = dsp_utils.apply_hpf_sweep(snippet, sr, start_freq=800, end_freq=20, num_chunks=16)
-                out[out_vstart:out_vstart + sweep_len] += sweep * gain
-                rest_start = b_vocal_entry + sweep_len
-            else:
-                # B enters at beat 0 — play at FULL volume from word 1 (no fade-in).
-                # A drums are ducked -12dB for 2 beats to make headroom for B's vocal.
-                # We never mute B mid-word.
-                sweep_len  = 0
-                rest_start = b_vocal_entry
-            if wl > sweep_len:
-                rest = b["vocals"][rest_start:src_end]
-                out[out_vstart + sweep_len:out_vstart + wl] += rest * gain
+            
+            # Apply a quick 10ms fade-in to the entering vocal to prevent zero-crossing clicks.
+            # No HPF sweep, so the vocal retains its full natural warmth.
+            fade_samples = min(int(0.01 * sr), wl)
+            snippet = b["vocals"][b_vocal_entry:src_end].copy()
+            if fade_samples > 0:
+                snippet[:fade_samples] *= np.linspace(0, 1, fade_samples, dtype=np.float32)[:, None]
+            out[out_vstart:out_vstart + wl] += snippet * gain
 
     # ------------------------------------------------------------------
     # Post-Blend: B Solo

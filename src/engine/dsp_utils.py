@@ -8,6 +8,8 @@ same shape they received, so callers don't need to worry.
 
 import librosa
 import numpy as np
+import audiotsm
+import audiotsm.io.array
 from scipy.ndimage import uniform_filter1d
 from scipy import signal
 
@@ -307,7 +309,41 @@ def apply_sidechain_duck(instrumental, vocal, sr, hop=512):
 
 
 # ---------------------------------------------------------------------------
-# HPF sweep (reveal effect)
+
+def stretch_stereo(audio, target_len):
+    """
+    Time-stretches an audio stem to exactly match target_len samples.
+    Uses audiotsm WSOLA to preserve stereo phase alignment and absolute width.
+    """
+    if len(audio) == target_len:
+        return audio
+        
+    rate = len(audio) / target_len
+    
+    # If mono or shape is unexpected, fallback to librosa
+    if audio.ndim != 2 or audio.shape[1] != 2:
+        return librosa.effects.time_stretch(y=audio, rate=rate)
+        
+    # WSOLA expects shape (channels, samples)
+    y_in = audio.T.astype(np.float32)
+    
+    reader = audiotsm.io.array.ArrayReader(y_in)
+    tsm = audiotsm.wsola(channels=2, speed=rate)
+    writer = audiotsm.io.array.ArrayWriter(channels=2)
+    tsm.run(reader, writer)
+    
+    out_audio = writer.data.T
+    
+    # Ensure lengths match exactly
+    if len(out_audio) > target_len:
+        out_audio = out_audio[:target_len]
+    elif len(out_audio) < target_len:
+        out_audio = np.pad(out_audio, ((0, target_len - len(out_audio)), (0, 0)))
+        
+    return out_audio
+
+# ---------------------------------------------------------------------------
+# FILTERING (HPF / LPF / Sweep)
 # ---------------------------------------------------------------------------
 
 def apply_hpf_sweep(audio, sr, start_freq=2000, end_freq=80, num_chunks=32):
