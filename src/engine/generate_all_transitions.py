@@ -458,7 +458,9 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
     # NOT reversed (reversed was creating a "plate hit" transient at the start).
     # ------------------------------------------------------------------
     noise_len    = int(2.0 * spb)
-    noise_mono   = dsp_utils.generate_white_noise_sweep(noise_len, sr) * 0.12
+    noise_mono   = dsp_utils.generate_white_noise_sweep(noise_len, sr) * 0.05
+    # Gentle low-pass at 8kHz so the sweep doesn't clash with cymbal energy
+    noise_mono   = dsp_utils.apply_lpf(noise_mono, sr, 8000)
     noise_stereo = np.stack([noise_mono, noise_mono], axis=1)
     nw = min(noise_len, total_len - drop_out)
     if nw > 0:
@@ -517,6 +519,20 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
         wl_b = src_end_b - b_swap
         if wl_b > 0:
             out[drop_out:drop_out + wl_b] += b[stem][b_swap:src_end_b] * fade_in[:wl_b] * gain
+
+        # ---- Track 1 fix: bridge the mid hollow by continuing A's synths ----
+        # Wild's 'other' stem is virtually silent at its drop (mid=0.001).
+        # Wild is a bass+drums-only intro — there are no synths for the full blend.
+        # We extend Tiesto's synths for 16 beats at a slow cosine fade-out
+        # so the mid band is filled for the entire first half of the blend zone.
+        if stem == "other":
+            bridge_beats = 16
+            bridge_len = min(bridge_beats * spb, blend_len)
+            a_other_src_end = min(a_swap + bridge_len, len(a["other"]))
+            wl_bridge = a_other_src_end - a_swap
+            if wl_bridge > 0:
+                bridge_env = np.cos(np.linspace(0.0, np.pi / 2, wl_bridge, dtype=np.float32))[:, None] * 0.55
+                out[drop_out:drop_out + wl_bridge] += a["other"][a_swap:a_other_src_end] * bridge_env
 
     # 4. A Vocals: write into blend zone with gentle LPF to push them back,
     #    hard cut at a_vocal_cut, then a short LPF echo tail.
