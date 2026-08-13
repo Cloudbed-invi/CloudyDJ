@@ -1,16 +1,20 @@
 import os
 import yt_dlp
 
-# New 128 BPM House Tracks for testing Smooth EQ Blend
 TRACKS = [
-    "https://www.youtube.com/watch?v=3nQNiWdeH2Q", # Janji - Heroes Tonight (128 BPM)
+    "ytsearch1:Fisher and Aatig Take It Off Extended Mix",
+    "ytsearch1:Dom Dolla Rhyme Dust Extended Mix",
+    "ytsearch1:Chris Lake In The Yuma Extended Mix",
+    "ytsearch1:John Summit Deep End Extended Mix",
+    "ytsearch1:Dom Dolla San Frandisco Extended Mix",
+    "ytsearch1:Knock2 dashstar Extended Mix",
 ]
 
 def download_tracks():
     out_dir = os.path.join(os.path.dirname(__file__), "library", "raw_audio")
     os.makedirs(out_dir, exist_ok=True)
     
-    print(f"Downloading 5 tracks to {out_dir}...")
+    print(f"Downloading {len(TRACKS)} tracks to {out_dir}...")
     
     ydl_opts = {
         'format': 'bestaudio/best',
