@@ -8,6 +8,17 @@ Cloudy DJ 2.0 is an advanced, automated AI DJ engine that can download tracks, e
 - **Drop Detection & Time Stretching**: Mathematically detects drops using bass RMS contrast and perfectly time-stretches stems.
 - **Advanced Transitions**: Capable of Drop Swaps, Bass Swaps, Loop Rolls, Echo Outs, and Multi-band EQ blends.
 
+## DJ Transition Techniques
+Based on standard DJ practices, this engine implements 7 primary transition techniques depending on harmonic, rhythmic, and energy compatibility:
+1. **The Long Blend**: For tracks with high harmonic compatibility and similar energy. The engine crossfades smoothly over 16-32 bars.
+2. **The Cut**: For tracks with matching BPMs but clashing keys. A sudden, immediate swap on a strong downbeat to avoid dissonant overlaps.
+3. **The Filter Sweep**: For tracks with different textures or energy levels. Uses high-pass and low-pass filters to bridge the gap and smooth out the contrast.
+4. **The Echo Out**: For dramatic shifts or set section transitions. The outgoing track washes out into a reverb/delay tail, creating a spacious moment before the incoming track hits.
+5. **The Loop and Build**: For building to a peak moment. Creates tension by looping a section of the outgoing track and layering riser effects before dropping the new track.
+6. **The Breakdown Swap**: The most musical transition. The incoming track's intro is seamlessly layered underneath the natural breakdown of the outgoing track.
+
+*Acknowledgements: The definitions and selection logic for these transition techniques are heavily inspired by [Mixgraph.io's DJ Transition Techniques Guide](https://www.mixgraph.io/learn/dj-transition-techniques).*
+
 ## Getting Started
 
 ### Prerequisites

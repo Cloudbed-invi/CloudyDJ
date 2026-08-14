@@ -321,14 +321,13 @@ def _write_len(out, start, stem, stem_start, stem_end):
 # T1 — Bass Swap Transition
 # ---------------------------------------------------------------------------
 
-def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
+def generate_transition(track_a_str, track_b_str, out_name, strategy="cut"):
     """
     Drop-Point Stem Swap:
       • A plays at 100% energy up to the EXACT drop.
       • B drums/synths secretly pre-roll inside the same pre_len window.
       • At the exact drop: A's bass stops, B's bass comes in FULL.
-      • A's other stems fade out over 32 beats.
-      • B's other stems fade in over 32 beats.
+      • Post-drop blend is handled dynamically by Mixgraph Strategy.
       • 3-Stage Vocal Handoff: A phrase cut + LPF echo, B delayed entry + HPF sweep reveal.
     """
     print(f"\n[Bass Swap] {track_a_str} -> {track_b_str}")
@@ -409,6 +408,21 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
         for stem in ["drums", "bass", "other", "vocals"]:
             wl = _write_len(out, out_pre_off, a[stem], a_pre_start, a_swap)
             chunk = a[stem][a_pre_start:a_pre_start + wl].copy()
+            
+            # THE LOOP AND BUILD: Create a 4-beat tension roll right before the drop
+            if strategy == "loop_and_build" and stem in ["drums", "other", "vocals"]:
+                roll_beats = 4
+                roll_samples = int(roll_beats * spb)
+                if wl > roll_samples:
+                    # Take 1 beat of audio, 4 beats before the drop
+                    loop_src = chunk[wl - roll_samples : wl - roll_samples + int(spb)].copy()
+                    
+                    # Create a repeating 1-beat loop for the last 4 beats
+                    for i in range(4):
+                        start = wl - roll_samples + (i * int(spb))
+                        end = start + int(spb)
+                        if end <= wl:
+                            chunk[start:end] = loop_src
 
             # When B sings at beat 0, fade A's vocals out over the last 8 beats
             # of pre-drop using a cosine curve (sounds natural, gives 3.5s clean runway).
@@ -467,58 +481,123 @@ def generate_bass_swap_transition(track_a_str, track_b_str, out_name):
         out[drop_out:drop_out + nw] += noise_stereo[:nw]
 
     # ------------------------------------------------------------------
-    # Post-Drop Blend Zone: 32 beats of silent morphing
+    # Post-Drop Blend Zone: strategy-based execution
     # ------------------------------------------------------------------
     t        = np.linspace(0.0, np.pi / 2, blend_len, dtype=np.float32)
     fade_out = np.cos(t)[:, None]
     fade_in  = np.sin(t)[:, None].astype(np.float32)
 
-    # 1. Bass: B plays full. A was hard cut at drop. (1 bass source)
+    # 1. Bass: Bass ALWAYS swaps instantly (with a 1-beat crossfade to prevent clicks/micro-silence)
+    bass_fade_len = min(spb, blend_len)
+    
+    b_first_beat_bass = b["bass"][b_swap:b_swap + spb]
+    b_bass_rms = np.sqrt(np.mean(dsp_utils._to_mono(b_first_beat_bass)**2)) if len(b_first_beat_bass) > 0 else 0
+    if b_bass_rms < 0.02:
+        bass_fade_len = min(2 * spb, blend_len)
+        print("  B bass has micro-silence. Extending A bass fade to cover gap.")
+
+    bass_fade_out = np.cos(np.linspace(0.0, np.pi / 2, bass_fade_len, dtype=np.float32))[:, None]
+    bass_fade_in  = np.sin(np.linspace(0.0, np.pi / 2, bass_fade_len, dtype=np.float32))[:, None]
+    
     b_bass_end = min(b_swap + blend_len, len(b["bass"]))
     bbl = b_bass_end - b_swap
     if bbl > 0:
-        out[drop_out:drop_out + bbl] += b["bass"][b_swap:b_bass_end] * gain
+        b_bass_chunk = b["bass"][b_swap:b_bass_end].copy() * gain
+        if bbl >= bass_fade_len:
+            b_bass_chunk[:bass_fade_len] *= bass_fade_in
+        else:
+            b_bass_chunk *= bass_fade_in[:bbl]
+        out[drop_out:drop_out + bbl] += b_bass_chunk
+        
+    a_bass_end = min(a_swap + bass_fade_len, len(a["bass"]))
+    abl = a_bass_end - a_swap
+    if abl > 0:
+        a_bass_chunk = a["bass"][a_swap:a_bass_end].copy()
+        a_bass_chunk *= bass_fade_out[:abl]
+        out[drop_out:drop_out + abl] += a_bass_chunk
 
-    # 2. Drums & Other: 16-beat Equal-Power Crossfade for drums, Wash Out for A's other
+    # 2. Drums & Other (Synths) -> Execute Mixgraph Strategy
     for stem in ["drums", "other"]:
-        if stem == "drums":
-            # A drums fade out over blend_len.
-            src_end = min(a_swap + blend_len, len(a[stem]))
+        if strategy == "long_blend":
+            # The Long Blend: 16-beat smooth crossfade
+            blend_beats = 16
+            fade_len = min(blend_beats * spb, blend_len)
+            
+            # A fades out smoothly
+            src_end = min(a_swap + fade_len, len(a[stem]))
             wl = src_end - a_swap
             if wl > 0:
-                a_drums_chunk = a[stem][a_swap:src_end] * fade_out[:wl]
-                if needs_duck:
+                chunk_fade_out = np.cos(np.linspace(0.0, np.pi / 2, fade_len, dtype=np.float32))[:, None]
+                a_chunk = a[stem][a_swap:src_end] * chunk_fade_out[:wl]
+                if stem == "drums" and needs_duck:
                     b_vocals_in_blend = b["vocals"][b_swap:b_swap + wl]
                     if len(b_vocals_in_blend) < wl:
-                        if b_vocals_in_blend.ndim == 2:
-                            b_vocals_in_blend = np.pad(b_vocals_in_blend, ((0, wl - len(b_vocals_in_blend)), (0, 0)), 'constant')
-                        else:
-                            b_vocals_in_blend = np.pad(b_vocals_in_blend, (0, wl - len(b_vocals_in_blend)), 'constant')
-                    a_drums_chunk = dsp_utils.apply_sidechain_duck(a_drums_chunk, b_vocals_in_blend, sr)
-                out[drop_out:drop_out + wl] += a_drums_chunk
-        else:
-            # A's 'other' (synths) Wash Out: hard cut at drop, massive reverb tail
+                        if b_vocals_in_blend.ndim == 2: b_vocals_in_blend = np.pad(b_vocals_in_blend, ((0, wl - len(b_vocals_in_blend)), (0, 0)), 'constant')
+                        else: b_vocals_in_blend = np.pad(b_vocals_in_blend, (0, wl - len(b_vocals_in_blend)), 'constant')
+                    a_chunk = dsp_utils.apply_sidechain_duck(a_chunk, b_vocals_in_blend, sr)
+                out[drop_out:drop_out + wl] += a_chunk
+                
+            # B drops at full volume (standard modern DJing approach to blends)
+            src_end_b = min(b_swap + blend_len, len(b[stem]))
+            wl_b = src_end_b - b_swap
+            if wl_b > 0:
+                out[drop_out:drop_out + wl_b] += b[stem][b_swap:src_end_b] * gain
+                
+        elif strategy == "cut":
+            # The Cut: Instant swap. No overlap for A.
+            # (A simply doesn't write anything post-drop).
+            src_end_b = min(b_swap + blend_len, len(b[stem]))
+            wl_b = src_end_b - b_swap
+            if wl_b > 0:
+                out[drop_out:drop_out + wl_b] += b[stem][b_swap:src_end_b] * gain
+                
+        elif strategy == "echo_out":
+            # The Echo Out: Hard cut A, but throw it into a massive reverb/delay tail
             wash_start = max(0, a_swap - 2 * spb)
             if a_swap > wash_start:
-                synth_snip = a["other"][wash_start:a_swap]
-                
-                # Use high-quality pedalboard reverb, NOT the dirty noise convolution
+                snip = a[stem][wash_start:a_swap]
                 from src.engine import effects
-                padded_snip = np.zeros((len(synth_snip) + blend_len, 2), dtype=np.float32)
-                padded_snip[:len(synth_snip)] = synth_snip
+                padded_snip = np.zeros((len(snip) + blend_len, 2), dtype=np.float32)
+                padded_snip[:len(snip)] = snip
                 wash_tail = effects.reverb_throw(padded_snip, len(padded_snip), sr)
-                
-                # Isolate the tail (the part after the snip ends)
-                tail = wash_tail[len(synth_snip):]
-                
+                tail = wash_tail[len(snip):]
                 wl_tail = min(len(tail), blend_len)
                 if wl_tail > 0:
                     out[drop_out:drop_out + wl_tail] += tail[:wl_tail] * 0.7
-            
-        src_end_b = min(b_swap + blend_len, len(b[stem]))
-        wl_b = src_end_b - b_swap
-        if wl_b > 0:
-            out[drop_out:drop_out + wl_b] += b[stem][b_swap:src_end_b] * fade_in[:wl_b] * gain
+                    
+            # B drops at full volume
+            src_end_b = min(b_swap + blend_len, len(b[stem]))
+            wl_b = src_end_b - b_swap
+            if wl_b > 0:
+                out[drop_out:drop_out + wl_b] += b[stem][b_swap:src_end_b] * gain
+                
+        elif strategy == "filter_sweep":
+            # The Filter Sweep: A gets LPF swept away over 16 beats. B drops full.
+            # (Ideally B would HPF in, but for a bass swap, dropping B full is standard).
+            blend_beats = 16
+            fade_len = min(blend_beats * spb, blend_len)
+            src_end = min(a_swap + fade_len, len(a[stem]))
+            wl = src_end - a_swap
+            if wl > 0:
+                chunk = a[stem][a_swap:src_end].copy()
+                # Apply a static LPF for now to mimic the swept sound (simplification)
+                chunk = dsp_utils.apply_lpf(chunk, sr, 1000)
+                chunk_fade_out = np.cos(np.linspace(0.0, np.pi / 2, fade_len, dtype=np.float32))[:, None]
+                chunk *= chunk_fade_out[:wl]
+                out[drop_out:drop_out + wl] += chunk
+                
+            # B drops at full volume
+            src_end_b = min(b_swap + blend_len, len(b[stem]))
+            wl_b = src_end_b - b_swap
+            if wl_b > 0:
+                out[drop_out:drop_out + wl_b] += b[stem][b_swap:src_end_b] * gain
+                
+        elif strategy == "loop_and_build":
+            # Loop and build finishes with a hard drop for A. B drops at full.
+            src_end_b = min(b_swap + blend_len, len(b[stem]))
+            wl_b = src_end_b - b_swap
+            if wl_b > 0:
+                out[drop_out:drop_out + wl_b] += b[stem][b_swap:src_end_b] * gain
 
         # ---- Track 1 fix: bridge the mid hollow by continuing A's synths ----
         # Wild's 'other' stem is virtually silent at its drop (mid=0.001).

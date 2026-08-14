@@ -1,6 +1,7 @@
 import sys, os
 sys.path.insert(0, '.')
-from src.engine.generate_all_transitions import generate_bass_swap_transition
+from src.engine.generate_all_transitions import generate_transition
+from decision_engine import analyze_transition_strategy
 
 out_dir = "output/camelot"
 os.makedirs(out_dir, exist_ok=True)
@@ -10,13 +11,13 @@ os.makedirs(out_dir, exist_ok=True)
 levels = [
     {
         "level": "1_Easy_SameKey",
-        "a": "Fisher and Aatig - Take It Off (Extended Mix)",
-        "b": "Dom Dolla - Rhyme Dust (Extended Mix)"
+        "a": "FISHER",
+        "b": "Rhyme Dust"
     },
     {
         "level": "2_Medium_Neighbor",
-        "a": "Dom Dolla - Rhyme Dust (Extended Mix)",
-        "b": "John Summit and Hayla - Where You Are (Extended Mix)"
+        "a": "Rhyme Dust",
+        "b": "WhereYouAre"
     },
     {
         "level": "3_Hard_Relative",
@@ -48,14 +49,18 @@ for l in levels:
         print(f"Match A: {track_a} ({crate[track_a]['key']}, {crate[track_a]['bpm']} BPM)")
         print(f"Match B: {track_b} ({crate[track_b]['key']}, {crate[track_b]['bpm']} BPM)")
         
+        # Determine Mixgraph Strategy
+        strategy = analyze_transition_strategy(track_a, track_b)
+        print(f"-> EXECUTING STRATEGY: {strategy.upper()}")
+        
         # We need the base ID (without .wav) for the generator
         id_a = track_a.replace(".wav", "")
         id_b = track_b.replace(".wav", "")
         
-        out_name = f"{out_dir}/{l['level']}_{id_a}_to_{id_b}.wav"
+        out_name = f"{out_dir}/{l['level']}_{strategy}_{id_a}_to_{id_b}.wav"
         
         try:
-            generate_bass_swap_transition(id_a, id_b, out_name)
+            generate_transition(id_a, id_b, out_name, strategy=strategy)
         except Exception as e:
             print(f"Failed to generate {l['level']}: {e}")
     else:
