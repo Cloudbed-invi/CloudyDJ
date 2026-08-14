@@ -710,6 +710,20 @@ def generate_transition(track_a_str, track_b_str, out_name, strategy="cut"):
             if w > 0:
                 out[out_post_off:out_post_off + w] += b[stem][b_post_start:end] * gain
 
+    if strategy in ["cut", "echo_out"]:
+        from src.engine import fx_generator
+        # Extract B's first beat to analyze its spectrum
+        b_first_beat_mix = b["bass"][b_swap:min(b_swap + spb, len(b["bass"]))] + \
+                           b["drums"][b_swap:min(b_swap + spb, len(b["drums"]))] + \
+                           b["other"][b_swap:min(b_swap + spb, len(b["other"]))]
+        
+        # Generates a spectrum-aware noise sweep (returns None if B is already very bright)
+        impact = fx_generator.generate_impact_fx(sr, 4.0, b_first_beat_mix)
+        if impact is not None:
+            wl_impact = min(len(impact), len(out) - drop_out)
+            if wl_impact > 0:
+                out[drop_out:drop_out + wl_impact] += impact[:wl_impact] * 0.75  # 75% volume
+
     out = normalize(out)
     print(f"  Saved -> {out_name}")
     sf.write(out_name, out, sr)
