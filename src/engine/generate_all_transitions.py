@@ -71,11 +71,7 @@ def normalize(audio):
 # Track loading
 # ---------------------------------------------------------------------------
 
-def detect_key(audio, sr):
-    chroma     = librosa.feature.chroma_cqt(y=_to_mono(audio), sr=sr)
-    chroma_sum = np.sum(chroma, axis=1)
-    classes    = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-    return classes[np.argmax(chroma_sum)]
+
 
 
 def detect_first_drop(bass_mono, beats, sr, bpm):
@@ -134,7 +130,7 @@ def get_track_data(crate, track_name):
     mono = _to_mono(drums + bass + other)
     _, beats = librosa.beat.beat_track(y=mono, sr=sr, bpm=data["bpm"], units='samples')
 
-    key = detect_key(other + bass, sr)
+    key = data["key"]
     
     # 100% accurate drop detection via crate metadata override
     drop_override = data.get("drop_idx")
@@ -207,35 +203,41 @@ def apply_warping(a, b_bpm):
         rate = MIN_WARP_RATE
 
     # ------------------------------------------------------------------
-    # Step 1: Stretch the full mix once to find the ACTUAL ratio
-    # (librosa's STFT may not produce exactly len/rate samples)
+    # Step 1: Compute Exact Target Length for Stems
     # ------------------------------------------------------------------
-    mix_mono     = _to_mono(a["vocals"] + a["drums"] + a["bass"] + a["other"])
-    mix_warped   = librosa.effects.time_stretch(mix_mono, rate=rate)
-    actual_rate  = len(mix_mono) / len(mix_warped)  # true ratio after vocoder
+    target_len = int(len(a["vocals"]) / rate)
+    actual_rate = rate
 
     # ------------------------------------------------------------------
-    # Step 2: Stretch each stem with the SAME actual_rate
-    # Because actual_rate came from one vocoder call, all stems will now
-    # be the same length and phase-aligned when re-summed.
+    # Step 2: Interleave stems to 8 channels and stretch with WSOLA
+    # This guarantees 100% perfect phase coherence across all stems
+    # to prevent frequency cancellation when summed back together.
     # ------------------------------------------------------------------
+    print(f"  Warping stems using 8-channel audiotsm WSOLA (rate={rate:.3f})...")
+    # Interleave to (N, 8)
+    interleaved = np.concatenate([
+        a["vocals"], a["drums"], a["bass"], a["other"]
+    ], axis=1)
+    
+    y_in = interleaved.T.astype(np.float32)
+    import audiotsm
+    import audiotsm.io.array
+    reader = audiotsm.io.array.ArrayReader(y_in)
+    tsm = audiotsm.wsola(channels=8, speed=rate)
+    writer = audiotsm.io.array.ArrayWriter(channels=8)
+    tsm.run(reader, writer)
+    out_audio = writer.data.T
+    
+    if len(out_audio) > target_len:
+        out_audio = out_audio[:target_len]
+    elif len(out_audio) < target_len:
+        out_audio = np.pad(out_audio, ((0, target_len - len(out_audio)), (0, 0)))
 
-    def stretch_stem(stem_audio):
-        target_len = int(len(stem_audio) / actual_rate)
-        return dsp_utils.stretch_stereo(stem_audio, target_len)
-
-    vocals_w = stretch_stem(a["vocals"])
-    drums_w  = stretch_stem(a["drums"])
-    bass_w   = stretch_stem(a["bass"])
-    other_w  = stretch_stem(a["other"])
-
-    # Hard-truncate all stems to the same length to prevent cumulative drift
-    # (the vocoder is non-deterministic — each call can differ by ±50 samples)
-    min_stem_len = min(len(vocals_w), len(drums_w), len(bass_w), len(other_w))
-    vocals_w = vocals_w[:min_stem_len]
-    drums_w  = drums_w[:min_stem_len]
-    bass_w   = bass_w[:min_stem_len]
-    other_w  = other_w[:min_stem_len]
+    # De-interleave back to (N, 2) stems
+    vocals_w = out_audio[:, 0:2]
+    drums_w  = out_audio[:, 2:4]
+    bass_w   = out_audio[:, 4:6]
+    other_w  = out_audio[:, 6:8]
 
     # ------------------------------------------------------------------
     # Step 3: Beat grid — MATHEMATICAL, not audio-detected
@@ -362,6 +364,13 @@ def generate_transition(track_a_str, track_b_str, out_name, strategy="cut"):
     if (a_vocal_cut - a_swap) > b_entry_offset:
         a_vocal_cut = a_swap + max(0, b_entry_offset - int(0.5 * spb))
 
+    # Fix Track 4 Clashing: if strategy is CUT and keys clash, don't let A vocals bleed into B's drop at all
+    if strategy == "cut":
+        from decision_engine import _camelot_distance
+        if _camelot_distance(a_orig["key"], b["key"]) == "clash":
+            a_vocal_cut = min(a_vocal_cut, a_swap)
+            print("  Vocal clash prevented: forced A vocal cut at drop.")
+
     print(f"  B vocal entry: {b_entry_offset/sr:.2f}s after drop")
     print(f"  A vocal cut: {(a_vocal_cut - a_swap)/sr:.2f}s after drop")
 
@@ -381,10 +390,21 @@ def generate_transition(track_a_str, track_b_str, out_name, strategy="cut"):
 
     # LUFS gain match — A drop vs B drop, capped to avoid extreme amplification
     a_measure = a["bass"][a_swap:min(a_swap + 4 * spb, len(a["bass"]))] + \
-                a["drums"][a_swap:min(a_swap + 4 * spb, len(a["drums"]))]
+                a["drums"][a_swap:min(a_swap + 4 * spb, len(a["drums"]))] + \
+                a["vocals"][a_swap:min(a_swap + 4 * spb, len(a["vocals"]))] + \
+                a["other"][a_swap:min(a_swap + 4 * spb, len(a["other"]))]
+                
     b_measure = b["bass"][b_swap:min(b_swap + 4 * spb, len(b["bass"]))] + \
-                b["drums"][b_swap:min(b_swap + 4 * spb, len(b["drums"]))]
+                b["drums"][b_swap:min(b_swap + 4 * spb, len(b["drums"]))] + \
+                b["vocals"][b_swap:min(b_swap + 4 * spb, len(b["vocals"]))] + \
+                b["other"][b_swap:min(b_swap + 4 * spb, len(b["other"]))]
     gain = min(_lufs_gain(a_measure, b_measure, sr), 2.0)  # cap: never amplify B by more than +6dB
+    
+    # In hard-swap strategies (cut, echo_out), A's drop and B's drop do not play simultaneously.
+    # Therefore, we DO NOT aggressively duck B. We want B to hit with full impact!
+    # If B is naturally louder than A (gain < 1.0), we force gain = 1.0 so B isn't weakened.
+    if strategy in ["cut", "echo_out"] and gain < 1.0:
+        gain = 1.0
 
     # Measure masking ratio to decide if we need to sidechain A's drums
     a_drums_rms = np.sqrt(np.mean(dsp_utils._to_mono(a["drums"][a_swap:min(a_swap + 4 * spb, len(a["drums"]))])**2))
@@ -434,6 +454,17 @@ def generate_transition(track_a_str, track_b_str, out_name, strategy="cut"):
                     chunk[-fade_samples:] *= fade_env[:, None]
                 else:
                     chunk[-fade_samples:] *= fade_env
+            else:
+                # Apply a tiny 5ms micro-fade-out to the very end of all other stems 
+                # (or vocals that aren't already faded) to prevent zero-crossing pops
+                # since A stops instantly at the drop in a CUT/ECHO_OUT strategy.
+                pop_fade_len = min(int(0.005 * sr), wl)
+                if pop_fade_len > 0:
+                    pop_fade = np.linspace(1.0, 0.0, pop_fade_len, dtype=np.float32)
+                    if chunk.ndim == 2:
+                        chunk[-pop_fade_len:] *= pop_fade[:, None]
+                    else:
+                        chunk[-pop_fade_len:] *= pop_fade
 
             out[out_pre_off:out_pre_off + wl] += chunk
 
@@ -487,34 +518,23 @@ def generate_transition(track_a_str, track_b_str, out_name, strategy="cut"):
     fade_out = np.cos(t)[:, None]
     fade_in  = np.sin(t)[:, None].astype(np.float32)
 
-    # 1. Bass: Bass ALWAYS swaps instantly (with a 1-beat crossfade to prevent clicks/micro-silence)
-    bass_fade_len = min(spb, blend_len)
-    
-    b_first_beat_bass = b["bass"][b_swap:b_swap + spb]
-    b_bass_rms = np.sqrt(np.mean(dsp_utils._to_mono(b_first_beat_bass)**2)) if len(b_first_beat_bass) > 0 else 0
-    if b_bass_rms < 0.02:
-        bass_fade_len = min(2 * spb, blend_len)
-        print("  B bass has micro-silence. Extending A bass fade to cover gap.")
-
-    bass_fade_out = np.cos(np.linspace(0.0, np.pi / 2, bass_fade_len, dtype=np.float32))[:, None]
-    bass_fade_in  = np.sin(np.linspace(0.0, np.pi / 2, bass_fade_len, dtype=np.float32))[:, None]
+    # 1. Bass: Bass ALWAYS swaps instantly.
+    # We apply a tiny 10ms micro-fade (approx 441 samples) to prevent zero-crossing pops,
+    # but absolutely NO 1-beat crossfade. A 1-beat crossfade destroys kick transients.
+    micro_fade_len = min(int(0.010 * sr), blend_len)
     
     b_bass_end = min(b_swap + blend_len, len(b["bass"]))
     bbl = b_bass_end - b_swap
     if bbl > 0:
         b_bass_chunk = b["bass"][b_swap:b_bass_end].copy() * gain
-        if bbl >= bass_fade_len:
-            b_bass_chunk[:bass_fade_len] *= bass_fade_in
-        else:
-            b_bass_chunk *= bass_fade_in[:bbl]
+        # Tiny fade in to prevent pop
+        if bbl >= micro_fade_len:
+            fade_in = np.linspace(0.0, 1.0, micro_fade_len, dtype=np.float32)
+            if b_bass_chunk.ndim == 2: b_bass_chunk[:micro_fade_len] *= fade_in[:, None]
+            else: b_bass_chunk[:micro_fade_len] *= fade_in
         out[drop_out:drop_out + bbl] += b_bass_chunk
         
-    a_bass_end = min(a_swap + bass_fade_len, len(a["bass"]))
-    abl = a_bass_end - a_swap
-    if abl > 0:
-        a_bass_chunk = a["bass"][a_swap:a_bass_end].copy()
-        a_bass_chunk *= bass_fade_out[:abl]
-        out[drop_out:drop_out + abl] += a_bass_chunk
+    # We DO NOT write A's bass after the swap point. A's bass stops instantly.
 
     # 2. Drums & Other (Synths) -> Execute Mixgraph Strategy
     for stem in ["drums", "other"]:
@@ -544,8 +564,8 @@ def generate_transition(track_a_str, track_b_str, out_name, strategy="cut"):
                 out[drop_out:drop_out + wl_b] += b[stem][b_swap:src_end_b] * gain
                 
         elif strategy == "cut":
-            # The Cut: Instant swap. No overlap for A.
-            # (A simply doesn't write anything post-drop).
+            # The Cut: Instant swap. No bleeding of A's drop audio into B.
+                
             src_end_b = min(b_swap + blend_len, len(b[stem]))
             wl_b = src_end_b - b_swap
             if wl_b > 0:
@@ -563,7 +583,8 @@ def generate_transition(track_a_str, track_b_str, out_name, strategy="cut"):
                 tail = wash_tail[len(snip):]
                 wl_tail = min(len(tail), blend_len)
                 if wl_tail > 0:
-                    out[drop_out:drop_out + wl_tail] += tail[:wl_tail] * 0.7
+                    # Boost the echo tail so it creates a massive wash. 0.7 was too quiet.
+                    out[drop_out:drop_out + wl_tail] += tail[:wl_tail] * 1.2
                     
             # B drops at full volume
             src_end_b = min(b_swap + blend_len, len(b[stem]))
@@ -629,7 +650,8 @@ def generate_transition(track_a_str, track_b_str, out_name, strategy="cut"):
         echo_src_end   = max(echo_src_start + 1, a_vocal_cut)
 
     # Loop Roll: only add if B doesn't sing immediately (would clash)
-    if b_entry_offset > int(2 * spb) and echo_src_end > echo_src_start and echo_src_start >= 0:
+    # AND only if strategy is NOT 'cut'. Cut implies harmonic clash or hard swap, so a loop roll ruins it.
+    if strategy != "cut" and b_entry_offset > int(2 * spb) and echo_src_end > echo_src_start and echo_src_start >= 0:
         vocal_snip = a["vocals"][echo_src_start:echo_src_end] # This is exactly 1 spb long
         # Repeat it to fill the gap until B enters, max 16 beats
         roll_beats = min(16, int(b_entry_offset / spb))
@@ -736,9 +758,13 @@ def generate_treble_swap_transition(track_a_str, track_b_str, out_name):
     a_m_end   = min(a_drop + 4 * spb, len(a["drums"]))
     b_m_end   = min(b_blend_start + blend_len, len(b["drums"]))
     a_measure = (_to_mono(a["drums"][a_m_start:a_m_end]) +
-                 _to_mono(a["bass"] [a_m_start:a_m_end]))
+                 _to_mono(a["bass"] [a_m_start:a_m_end]) +
+                 _to_mono(a["vocals"][a_m_start:a_m_end]) +
+                 _to_mono(a["other"] [a_m_start:a_m_end]))
     b_measure = (_to_mono(b["drums"][b_blend_start:b_m_end]) +
-                 _to_mono(b["bass"] [b_blend_start:b_m_end]))
+                 _to_mono(b["bass"] [b_blend_start:b_m_end]) +
+                 _to_mono(b["vocals"][b_blend_start:b_m_end]) +
+                 _to_mono(b["other"] [b_blend_start:b_m_end]))
     gain = _lufs_gain(a_measure, b_measure, sr)
     print(f"  LUFS gain applied to B: {gain:.3f}× (ref: A's drop, not outro)")
 

@@ -5,22 +5,39 @@ import numpy as np
 CRATE_FILE = os.path.join(os.path.dirname(__file__), "library", "crate.json")
 
 CAMELOT_MAP = {
-    "C": (8, "B"), "Am": (8, "A"), "A": (11, "B"), "F#m": (11, "A"),
-    "G": (9, "B"), "Em": (9, "A"), "E": (12, "B"), "C#m": (12, "A"),
-    "D": (10, "B"), "Bm": (10, "A"), "B": (1, "B"), "G#m": (1, "A"),
-    "F#": (2, "B"), "D#m": (2, "A"), "Db": (3, "B"), "Bbm": (3, "A"),
-    "Ab": (4, "B"), "Fm": (4, "A"), "Eb": (5, "B"), "Cm": (5, "A"),
-    "Bb": (6, "B"), "Gm": (6, "A"), "F": (7, "B"), "Dm": (7, "A"),
-    
-    # Enharmonics
-    "D#": (2, "A"), "A#": (3, "A"), "G#": (1, "A"),
-    "C#": (12, "A"), "E": (9, "A")
+    # Minor Keys (A)
+    "G#m": (1, "A"), "Abm": (1, "A"),
+    "D#m": (2, "A"), "Ebm": (2, "A"),
+    "A#m": (3, "A"), "Bbm": (3, "A"),
+    "Fm":  (4, "A"),
+    "Cm":  (5, "A"),
+    "Gm":  (6, "A"),
+    "Dm":  (7, "A"),
+    "Am":  (8, "A"),
+    "Em":  (9, "A"),
+    "Bm":  (10, "A"),
+    "F#m": (11, "A"), "Gbm": (11, "A"),
+    "C#m": (12, "A"), "Dbm": (12, "A"),
+
+    # Major Keys (B)
+    "B":   (1, "B"), "Cb": (1, "B"),
+    "F#":  (2, "B"), "Gb": (2, "B"),
+    "C#":  (3, "B"), "Db": (3, "B"),
+    "G#":  (4, "B"), "Ab": (4, "B"),
+    "D#":  (5, "B"), "Eb": (5, "B"),
+    "A#":  (6, "B"), "Bb": (6, "B"),
+    "F":   (7, "B"),
+    "C":   (8, "B"),
+    "G":   (9, "B"),
+    "D":   (10, "B"),
+    "A":   (11, "B"),
+    "E":   (12, "B")
 }
 
 def _camelot_distance(key_a, key_b):
     # Normalize strings like "C Minor" -> "Cm", "G Major" -> "G"
-    ka = key_a.replace(" Minor", "m").replace(" Major", "")
-    kb = key_b.replace(" Minor", "m").replace(" Major", "")
+    ka = key_a.replace(" Minor", "m").replace(" Major", "").strip()
+    kb = key_b.replace(" Minor", "m").replace(" Major", "").strip()
     
     ca = CAMELOT_MAP.get(ka)
     cb = CAMELOT_MAP.get(kb)
