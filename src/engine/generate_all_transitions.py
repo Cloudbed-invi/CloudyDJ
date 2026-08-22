@@ -155,6 +155,7 @@ def get_track_data(crate, track_name):
         "drop_confident": drop_confident,
         "sr":             sr,
         "segments":       data.get("segments", []),
+        "vocal_words":    data.get("vocal_words", []),
     }
 
 
@@ -274,17 +275,25 @@ def apply_warping(a, b_bpm):
          "end_sample":   int(s["end_sample"]   / actual_rate)}
         for s in a.get("segments", [])
     ]
+    
+    vocal_words_warped = [
+        {**w,
+         "start": w["start"] / actual_rate,
+         "end":   w["end"]   / actual_rate}
+        for w in a.get("vocal_words", [])
+    ]
 
     return {
         **a,
-        "bpm":      b_bpm,
-        "vocals":   vocals_w,
-        "drums":    drums_w,
-        "bass":     bass_w,
-        "other":    other_w,
-        "beats":    beats_warped,
-        "drop_idx": drop_idx_warped,
-        "segments": segments_warped,
+        "bpm":         b_bpm,
+        "vocals":      vocals_w,
+        "drums":       drums_w,
+        "bass":        bass_w,
+        "other":       other_w,
+        "beats":       beats_warped,
+        "drop_idx":    drop_idx_warped,
+        "segments":    segments_warped,
+        "vocal_words": vocal_words_warped,
     }
 
 
@@ -342,11 +351,17 @@ def generate_transition(track_a_str, track_b_str, out_name, strategy="cut"):
     sr     = a["sr"]
     spb    = int((60.0 / b["bpm"]) * sr)
 
-    # EXACT DROP POINTS
+    # EXACT DROP POINTS — snapped to nearest zero crossing to eliminate click artifacts
     a_drop = _safe_beat(a["beats"], a["drop_idx"])
     b_drop = _safe_beat(b["beats"], b["drop_idx"])
-    a_swap = a_drop
-    b_swap = b_drop
+    
+    # Snap both cut points to the nearest zero crossing in the mixed signal
+    # This prevents mid-waveform splices that create audible clicks
+    a_mix = a["drums"] + a["bass"] + a["other"]
+    b_mix = b["drums"] + b["bass"] + b["other"]
+    a_swap = dsp_utils.find_zero_crossing(a_mix, a_drop, search_radius=1024, direction='before')
+    b_swap = dsp_utils.find_zero_crossing(b_mix, b_drop, search_radius=1024, direction='after')
+    print(f"  ZC snap: A cut {a_drop} -> {a_swap} (offset {a_swap - a_drop}), B start {b_drop} -> {b_swap} (offset {b_swap - b_drop})")
 
     # ------------------------------------------------------------------
     # Whisper vocal boundaries - BATON PASS
@@ -499,17 +514,19 @@ def generate_transition(track_a_str, track_b_str, out_name, strategy="cut"):
                     out[echo_start:echo_start + ew] += rev_slice[:ew] * vol * gain
 
     # ------------------------------------------------------------------
-    # White noise impact at the exact drop — forward sweep (rises then fades),
-    # NOT reversed (reversed was creating a "plate hit" transient at the start).
+    # White noise impact at the exact drop — forward sweep
+    # Applied only on 'cut' (at very low volume to mask splice) or 'filter_sweep'
     # ------------------------------------------------------------------
-    noise_len    = int(2.0 * spb)
-    noise_mono   = dsp_utils.generate_white_noise_sweep(noise_len, sr) * 0.05
-    # Gentle low-pass at 8kHz so the sweep doesn't clash with cymbal energy
-    noise_mono   = dsp_utils.apply_lpf(noise_mono, sr, 8000)
-    noise_stereo = np.stack([noise_mono, noise_mono], axis=1)
-    nw = min(noise_len, total_len - drop_out)
-    if nw > 0:
-        out[drop_out:drop_out + nw] += noise_stereo[:nw]
+    if strategy in ["cut", "filter_sweep", "quick_blend"]:
+        noise_vol = 0.02 if strategy in ["cut", "quick_blend"] else 0.05
+        noise_len    = int(2.0 * spb)
+        noise_mono   = dsp_utils.generate_white_noise_sweep(noise_len, sr) * noise_vol
+        # Gentle low-pass at 8kHz so the sweep doesn't clash with cymbal energy
+        noise_mono   = dsp_utils.apply_lpf(noise_mono, sr, 8000)
+        noise_stereo = np.stack([noise_mono, noise_mono], axis=1)
+        nw = min(noise_len, total_len - drop_out)
+        if nw > 0:
+            out[drop_out:drop_out + nw] += noise_stereo[:nw]
 
     # ------------------------------------------------------------------
     # Post-Drop Blend Zone: strategy-based execution
@@ -527,11 +544,11 @@ def generate_transition(track_a_str, track_b_str, out_name, strategy="cut"):
     bbl = b_bass_end - b_swap
     if bbl > 0:
         b_bass_chunk = b["bass"][b_swap:b_bass_end].copy() * gain
-        # Tiny fade in to prevent pop
+        # Tiny fade in to prevent pop — use separate variable to NOT overwrite blend fade_in
         if bbl >= micro_fade_len:
-            fade_in = np.linspace(0.0, 1.0, micro_fade_len, dtype=np.float32)
-            if b_bass_chunk.ndim == 2: b_bass_chunk[:micro_fade_len] *= fade_in[:, None]
-            else: b_bass_chunk[:micro_fade_len] *= fade_in
+            bass_micro_fade = np.linspace(0.0, 1.0, micro_fade_len, dtype=np.float32)
+            if b_bass_chunk.ndim == 2: b_bass_chunk[:micro_fade_len] *= bass_micro_fade[:, None]
+            else: b_bass_chunk[:micro_fade_len] *= bass_micro_fade
         out[drop_out:drop_out + bbl] += b_bass_chunk
         
     # We DO NOT write A's bass after the swap point. A's bass stops instantly.
